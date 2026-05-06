@@ -3,11 +3,15 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
-const TILE_COLS = 9;
-const TILE_ROWS = 5;
+const TILE_COLS = 10;
+const TILE_ROWS = 6;
 const TILE_COUNT = TILE_COLS * TILE_ROWS;
-const TILE_SIZE = 0.7;
-const TILE_GAP = 0.705;
+const TILE_SIZE = 0.94;
+const TILE_GAP = 0.94;
+const CENTER_COL = 4;
+const CENTER_ROW = 2;
+const CENTER_TILE_X = (CENTER_COL - (TILE_COLS - 1) / 2) * TILE_GAP;
+const CENTER_TILE_Y = (CENTER_ROW - (TILE_ROWS - 1) / 2) * -TILE_GAP;
 const WALL_Z = -0.62;
 const INSERTED_LIFT = 0.06;
 const FLOATING_TILE_Z = 1.15;
@@ -78,20 +82,19 @@ export default function HeroScene() {
     if (!host) return undefined;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#020811');
-    scene.fog = new THREE.Fog('#071523', 5.5, 18);
 
     const camera = new THREE.PerspectiveCamera(38, host.clientWidth / host.clientHeight, 0.1, 80);
-    camera.position.set(0, 0.08, 6.8);
+    camera.position.set(0, 0, 7.2);
+    camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
-      alpha: false,
+      alpha: true,
       powerPreference: 'high-performance',
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
     renderer.setSize(host.clientWidth, host.clientHeight);
-    renderer.setClearColor('#020811', 1);
+    renderer.setClearColor('#000000', 0);
     host.appendChild(renderer.domElement);
 
     const textureVersion = Date.now();
@@ -116,7 +119,7 @@ export default function HeroScene() {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
-    const seams = new THREE.Mesh(new THREE.PlaneGeometry(6.42, 3.58), seamMaterial);
+    const seams = new THREE.Mesh(new THREE.PlaneGeometry(9.5, 5.68), seamMaterial);
     seams.position.z = -0.06;
     wallGroup.add(seams);
 
@@ -125,7 +128,7 @@ export default function HeroScene() {
     const wallTiles = new THREE.InstancedMesh(tileGeometry, tileMaterial, TILE_COUNT);
     wallGroup.add(wallTiles);
 
-    const tileFaceGeometry = new THREE.PlaneGeometry(0.692, 0.692);
+    const tileFaceGeometry = new THREE.PlaneGeometry(0.932, 0.932);
     const tileFaceMaterial = new THREE.MeshBasicMaterial({
       color: '#ffffff',
       map: emptyTileTexture,
@@ -135,14 +138,16 @@ export default function HeroScene() {
     wallGroup.add(wallFaces);
 
     const tileData = Array.from({ length: TILE_COUNT }, (_, index) => {
-      const x = (index % TILE_COLS - (TILE_COLS - 1) / 2) * TILE_GAP;
-      const y = (Math.floor(index / TILE_COLS) - (TILE_ROWS - 1) / 2) * -TILE_GAP;
+      const col = index % TILE_COLS;
+      const row = Math.floor(index / TILE_COLS);
+      const x = (col - (TILE_COLS - 1) / 2) * TILE_GAP;
+      const y = (row - (TILE_ROWS - 1) / 2) * -TILE_GAP;
       return {
         x,
         y,
         distance: Math.sqrt(x * x + y * y),
         phase: index * 0.73,
-        isCenter: Math.abs(x) < 0.05 && Math.abs(y) < 0.05,
+        isCenter: col === CENTER_COL && row === CENTER_ROW,
       };
     });
     const dummy = new THREE.Object3D();
@@ -159,7 +164,7 @@ export default function HeroScene() {
     tile.add(tileBody);
 
     const currentBrandFace = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.692, 0.692),
+      new THREE.PlaneGeometry(0.932, 0.932),
       new THREE.MeshBasicMaterial({
         color: '#ffffff',
         map: currentBrandTexture,
@@ -255,10 +260,8 @@ export default function HeroScene() {
       const delta = Math.min(clock.getDelta(), 0.04);
       const elapsed = clock.elapsedTime;
 
-      camera.position.x = THREE.MathUtils.damp(camera.position.x, pointer.x * 0.22 + Math.sin(elapsed * 0.34) * 0.18, 1.8, delta);
-      camera.position.y = THREE.MathUtils.damp(camera.position.y, pointer.y * 0.12 + Math.cos(elapsed * 0.27) * 0.08, 1.8, delta);
-      camera.position.z = THREE.MathUtils.damp(camera.position.z, insertionStarted ? 6.1 : 6.7, 1.35, delta);
-      camera.lookAt(pointer.x * 0.1, pointer.y * 0.05, 0);
+      camera.position.set(0, 0, 7.2);
+      camera.lookAt(0, 0, 0);
 
       const impactLife = impactAt == null ? -1 : elapsed - impactAt;
       const centerWave = impactLife > 0 ? Math.max(0, 1 - Math.abs(impactLife * 2.2) * 1.55) : 0;
@@ -270,13 +273,13 @@ export default function HeroScene() {
         const z = dampedWave * 0.42 + Math.sin(elapsed * 0.8 + data.phase) * 0.018 + (inserted && data.isCenter ? INSERTED_LIFT : 0);
 
         dummy.position.set(data.x, data.y, z);
-        dummy.rotation.set(pointer.y * 0.01, -pointer.x * 0.01, 0);
+        dummy.rotation.set(0, 0, 0);
         dummy.scale.setScalar(inserted && data.isCenter ? 1.03 : 1);
         dummy.updateMatrix();
         wallTiles.setMatrixAt(index, dummy.matrix);
 
         dummy.position.set(data.x, data.y, z + 0.036);
-        dummy.rotation.set(pointer.y * 0.01, -pointer.x * 0.01, 0);
+        dummy.rotation.set(0, 0, 0);
         if (inserted && data.isCenter) {
           dummy.scale.set(0, 0, 0);
         } else {
@@ -289,15 +292,15 @@ export default function HeroScene() {
       wallFaces.instanceMatrix.needsUpdate = true;
 
       if (!insertionStarted) {
-        tile.position.x = THREE.MathUtils.damp(tile.position.x, pointer.x * 0.28, 4, delta);
-        tile.position.y = THREE.MathUtils.damp(tile.position.y, pointer.y * 0.18 + Math.sin(elapsed * 1.1) * 0.05, 4, delta);
-        tile.rotation.x = THREE.MathUtils.damp(tile.rotation.x, pointer.y * -0.24, 4, delta);
-        tile.rotation.y = THREE.MathUtils.damp(tile.rotation.y, pointer.x * 0.38, 4, delta);
+        tile.position.x = 0;
+        tile.position.y = 0.05;
+        tile.rotation.x = 0;
+        tile.rotation.y = 0;
       } else if (!inserted) {
         progress = Math.min(1, progress + delta / 2.2);
         const eased = progress * progress * (3 - 2 * progress);
-        tile.position.x = THREE.MathUtils.damp(tile.position.x, 0, 5, delta);
-        tile.position.y = THREE.MathUtils.damp(tile.position.y, 0, 5, delta);
+        tile.position.x = THREE.MathUtils.damp(tile.position.x, CENTER_TILE_X, 5, delta);
+        tile.position.y = THREE.MathUtils.damp(tile.position.y, CENTER_TILE_Y, 5, delta);
         tile.position.z = THREE.MathUtils.lerp(FLOATING_TILE_Z, WALL_Z + INSERTED_LIFT + LANDED_TILE_Z_OFFSET, eased);
         tile.rotation.x = THREE.MathUtils.damp(tile.rotation.x, 0, 4, delta);
         tile.rotation.y = THREE.MathUtils.damp(tile.rotation.y, 0, 4, delta);
@@ -314,11 +317,11 @@ export default function HeroScene() {
           }
         }
       } else {
-        tile.position.x = THREE.MathUtils.damp(tile.position.x, 0, 7, delta);
-        tile.position.y = THREE.MathUtils.damp(tile.position.y, 0, 7, delta);
+        tile.position.x = THREE.MathUtils.damp(tile.position.x, CENTER_TILE_X, 7, delta);
+        tile.position.y = THREE.MathUtils.damp(tile.position.y, CENTER_TILE_Y, 7, delta);
         tile.position.z = WALL_Z + centerLift + LANDED_TILE_Z_OFFSET;
-        tile.rotation.x = THREE.MathUtils.damp(tile.rotation.x, pointer.y * 0.01, 4, delta);
-        tile.rotation.y = THREE.MathUtils.damp(tile.rotation.y, -pointer.x * 0.01, 4, delta);
+        tile.rotation.x = 0;
+        tile.rotation.y = 0;
         tile.scale.setScalar(1);
       }
 

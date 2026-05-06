@@ -24,15 +24,16 @@ export default function DigitalThankYouWall() {
 
   return (
     <main className="experience-shell">
-      <Suspense fallback={<div className="loading">Preparing the wall</div>}>
-        <HeroScene partners={partners} primaryPartner={primaryPartner} />
-      </Suspense>
-
-      <div className="brand-mark" aria-label="Digital Thank You Wall by Givewall">
-        <span>Givewall</span>
-        <strong>Digital Thank You Wall</strong>
+      <div className="livewall-stage" aria-label="LiveWall Your Place on the Wall">
+        <img className="livewall-room" src="/assets/figma/livewall-room.png" alt="" />
+        <div className="livewall-title">Your Place on the Wall</div>
+        <div className="livewall-wall">
+          <Suspense fallback={<div className="loading">Preparing the wall</div>}>
+            <HeroScene partners={partners} primaryPartner={primaryPartner} />
+          </Suspense>
+        </div>
+        <img className="livewall-logo" src="/assets/figma/livewall-logo.png" alt="LiveWall" />
       </div>
-      <div className="sound-hint">Click to enable sound</div>
     </main>
   );
 }
