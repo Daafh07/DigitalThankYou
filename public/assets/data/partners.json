@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Givewall",
+    "logo": "/assets/logos/givewall-placeholder.svg",
+    "tileStyle": "classic"
+  },
+  {
+    "name": "Studio Delft",
+    "logo": "/assets/logos/partner-placeholder.svg",
+    "tileStyle": "floral"
+  },
+  {
+    "name": "North Sea Fund",
+    "logo": "/assets/logos/partner-placeholder.svg",
+    "tileStyle": "crest"
+  },
+  {
+    "name": "Museum Circle",
+    "logo": "/assets/logos/partner-placeholder.svg",
+    "tileStyle": "classic"
+  },
+  {
+    "name": "Canal Partners",
+    "logo": "/assets/logos/partner-placeholder.svg",
+    "tileStyle": "floral"
+  },
+  {
+    "name": "Golden Seam",
+    "logo": "/assets/logos/partner-placeholder.svg",
+    "tileStyle": "crest"
+  }
+]

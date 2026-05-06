@@ -1,0 +1,6 @@
+<svg width="640" height="220" viewBox="0 0 640 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="640" height="220" rx="22" fill="#fffaf0"/>
+  <path d="M100 126c33-58 74-58 107 0 33-58 74-58 107 0" stroke="#0A4F91" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="352" y="126" fill="#0A4F91" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="700" text-anchor="middle">Givewall</text>
+  <path d="M56 43h528M56 177h528" stroke="#D5A84D" stroke-width="6" stroke-linecap="round"/>
+</svg>
