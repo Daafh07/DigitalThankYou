@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import HeroScene from './HeroScene';
 
 const FALLBACK_PARTNERS = [
@@ -10,8 +10,14 @@ const FALLBACK_PARTNERS = [
   { name: 'Museum Circle', logo: '/assets/logos/partner-placeholder.svg', tileStyle: 'classic' },
 ];
 
+const CACHE_VERSION = 'v1';
+const LOADING_BACKGROUND = `/assets/figma/achtergrondloading.svg?${CACHE_VERSION}`;
+
 export default function DigitalThankYouWall() {
   const [partners, setPartners] = useState(FALLBACK_PARTNERS);
+  const [assetsReady, setAssetsReady] = useState(false);
+  const [sceneReady, setSceneReady] = useState(false);
+  const [minimumTimePassed, setMinimumTimePassed] = useState(false);
 
   useEffect(() => {
     fetch('/assets/data/partners.json')
@@ -20,19 +26,56 @@ export default function DigitalThankYouWall() {
       .catch(() => setPartners(FALLBACK_PARTNERS));
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const minimumTimer = window.setTimeout(() => {
+      if (!cancelled) setMinimumTimePassed(true);
+    }, 950);
+
+    const loadImage = (src) => new Promise((resolve) => {
+      const image = new Image();
+      image.onload = resolve;
+      image.onerror = resolve;
+      image.src = src;
+      if (image.decode) image.decode().then(resolve).catch(resolve);
+    });
+
+    Promise.all([
+      loadImage(`/assets/figma/livewall-room.png?${CACHE_VERSION}`),
+      loadImage(`/assets/figma/livewall-logo.png?${CACHE_VERSION}`),
+      loadImage(LOADING_BACKGROUND),
+    ]).then(() => {
+      if (!cancelled) setAssetsReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(minimumTimer);
+    };
+  }, []);
+
   const primaryPartner = useMemo(() => partners[0] ?? FALLBACK_PARTNERS[0], [partners]);
+  const handleSceneReady = useCallback(() => {
+    setSceneReady(true);
+  }, []);
+  const loadingComplete = assetsReady && sceneReady && minimumTimePassed;
 
   return (
     <main className="experience-shell">
       <div className="livewall-stage" aria-label="LiveWall Your Place on the Wall">
-        <img className="livewall-room" src="/assets/figma/livewall-room.png" alt="" />
+        <img className="livewall-room" src={`/assets/figma/livewall-room.png?${CACHE_VERSION}`} alt="" />
         <div className="livewall-title">Your Place on the Wall</div>
         <div className="livewall-wall">
           <Suspense fallback={<div className="loading">Preparing the wall</div>}>
-            <HeroScene partners={partners} primaryPartner={primaryPartner} />
+            <HeroScene partners={partners} primaryPartner={primaryPartner} onReady={handleSceneReady} />
           </Suspense>
         </div>
-        <img className="livewall-logo" src="/assets/figma/livewall-logo.png" alt="LiveWall" />
+        <img className="livewall-logo" src={`/assets/figma/livewall-logo.png?${CACHE_VERSION}`} alt="LiveWall" />
+        <div className={`livewall-loader${loadingComplete ? ' livewall-loader-hidden' : ''}`} aria-hidden={loadingComplete}>
+          <img className="livewall-loader-bg" src={LOADING_BACKGROUND} alt="" />
+          <img className="livewall-loader-logo" src={`/assets/figma/livewall-logo.png?${CACHE_VERSION}`} alt="" />
+          <div className="livewall-loader-line" />
+        </div>
       </div>
     </main>
   );
