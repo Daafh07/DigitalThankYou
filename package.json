@@ -1,0 +1,26 @@
+{
+  "name": "digital-thank-you-wall",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.0.6",
+    "@react-three/fiber": "^9.0.4",
+    "@react-three/postprocessing": "^3.0.4",
+    "gsap": "^3.12.7",
+    "next": "^15.2.3",
+    "postprocessing": "^6.36.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "three": "^0.174.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.23.0",
+    "eslint-config-next": "^15.2.3"
+  }
+}
