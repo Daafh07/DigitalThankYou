@@ -19,6 +19,7 @@ export default function DigitalThankYouWall() {
   const [sceneReady, setSceneReady] = useState(false);
   const [minimumTimePassed, setMinimumTimePassed] = useState(false);
   const [focusOverlayVisible, setFocusOverlayVisible] = useState(true);
+  const [revealLightVisible, setRevealLightVisible] = useState(false);
 
   useEffect(() => {
     fetch('/assets/data/partners.json')
@@ -67,6 +68,7 @@ export default function DigitalThankYouWall() {
         <img className="livewall-room" src={`/assets/figma/livewall-room.png?${CACHE_VERSION}`} alt="" />
         <div className="livewall-title">Your Place on the Wall</div>
         <div className={`focus-overlay${focusOverlayVisible ? ' focus-overlay-visible' : ''}`} />
+        <div className={`reveal-light-overlay${revealLightVisible ? ' reveal-light-overlay-visible' : ''}`} />
         <div className="livewall-wall">
           <Suspense fallback={<div className="loading">Preparing the wall</div>}>
             <HeroScene
@@ -74,6 +76,7 @@ export default function DigitalThankYouWall() {
               primaryPartner={primaryPartner}
               onReady={handleSceneReady}
               onFocusOverlayChange={setFocusOverlayVisible}
+              onRevealLightChange={setRevealLightVisible}
             />
           </Suspense>
         </div>

@@ -11,14 +11,21 @@ const EMPTY_TILE_TEXTURE = '/assets/textures/emptytile.svg';
 const CURRENT_BRAND_TEXTURE = '/assets/textures/currentbrand.svg';
 const RITUALS_TEXTURE = '/assets/textures/rituals.svg';
 const BURGERKING_TEXTURE = '/assets/textures/burgerking.svg';
+const LOCKED_TILE_TEXTURE = '/assets/textures/lockedtile.svg';
 const TILE_BACK_TEXTURE = '/assets/textures/achterkantefteling.svg';
 const CERAMIC_EDGE_TEXTURE = '/assets/textures/keramiek.jpg';
 const DROP_SOUND = '/assets/audio/dropsound.mp3';
 const FREE_TILE_SCALE = 3.75;
-const FREE_TILE_Z = 2.25;
-const TILE_DEPTH = 0.14;
+const FREE_TILE_Z = 3.25;
+const TILE_DEPTH = 0.10;
 const TILE_ART_ASPECT = 79 / 82;
 const FOCUS_OVERLAY_OPACITY = 0.22;
+const WALL_VIEWPORT = {
+  left: 0.2208,
+  top: 0.1444,
+  width: 0.5604,
+  height: 0.5356 * 0.964,
+};
 const FIXED_CLIENT_TILES = {
   [CURRENT_BRAND_INDEX - 1]: 'rituals',
   [CURRENT_BRAND_INDEX + 1]: 'burgerking',
@@ -92,7 +99,99 @@ function loadImageTexture(url, renderer, version, onComplete) {
   return configureTexture(texture, renderer);
 }
 
-export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
+function createCrackTexture(renderer) {
+  const size = 2048;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, size, size);
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+
+  const center = { x: size * 0.5, y: size * 0.5 };
+  const seeds = [
+    { angle: -2.78, length: 0.5, width: 8 },
+    { angle: -2.2, length: 0.38, width: 5 },
+    { angle: -1.58, length: 0.54, width: 8 },
+    { angle: -1.02, length: 0.42, width: 5 },
+    { angle: -0.46, length: 0.58, width: 8 },
+    { angle: 0.08, length: 0.46, width: 6 },
+    { angle: 0.62, length: 0.5, width: 7 },
+    { angle: 1.18, length: 0.42, width: 5 },
+    { angle: 1.72, length: 0.52, width: 8 },
+    { angle: 2.3, length: 0.46, width: 6 },
+    { angle: 2.82, length: 0.56, width: 8 },
+  ];
+
+  const drawCrack = (points, width, alpha) => {
+    context.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.55})`;
+    context.lineWidth = width * 1.65;
+    context.beginPath();
+    points.forEach((point, index) => {
+      if (index === 0) context.moveTo(point.x + 3, point.y - 2);
+      else context.lineTo(point.x + 3, point.y - 2);
+    });
+    context.stroke();
+
+    context.strokeStyle = `rgba(16, 53, 126, ${alpha})`;
+    context.lineWidth = width;
+    context.beginPath();
+    points.forEach((point, index) => {
+      if (index === 0) context.moveTo(point.x, point.y);
+      else context.lineTo(point.x, point.y);
+    });
+    context.stroke();
+
+    context.strokeStyle = `rgba(3, 16, 45, ${alpha * 0.38})`;
+    context.lineWidth = Math.max(1, width * 0.34);
+    context.beginPath();
+    points.forEach((point, index) => {
+      if (index === 0) context.moveTo(point.x - 2, point.y + 1);
+      else context.lineTo(point.x - 2, point.y + 1);
+    });
+    context.stroke();
+  };
+
+  seeds.forEach((seed, index) => {
+    const points = [];
+    const segmentCount = 7 + (index % 4);
+    for (let step = 0; step <= segmentCount; step += 1) {
+      const amount = step / segmentCount;
+      const angle = seed.angle
+        + Math.sin(step * 2.45 + index * 0.8) * 0.13
+        + Math.cos(step * 1.25 + index) * 0.06;
+      const radius = size * seed.length * amount * (0.45 + Math.sin(amount * Math.PI) * 0.12);
+      points.push({
+        x: center.x + Math.cos(angle) * radius,
+        y: center.y + Math.sin(angle) * radius,
+      });
+    }
+    drawCrack(points, seed.width, 0.72);
+
+    const branchCount = index % 2 === 0 ? 2 : 1;
+    for (let branchIndex = 0; branchIndex < branchCount; branchIndex += 1) {
+      const branchRoot = points[Math.floor(points.length * (0.38 + branchIndex * 0.18))];
+      const branchDirection = seed.angle + (branchIndex % 2 === 0 ? 1 : -1) * (0.62 + Math.random() * 0.42);
+      const branchPoints = [branchRoot];
+      const branchLength = size * seed.length * (0.12 + Math.random() * 0.1);
+      for (let step = 1; step <= 4; step += 1) {
+        const amount = step / 4;
+        const angle = branchDirection + Math.sin(step * 1.9 + index) * 0.12;
+        branchPoints.push({
+          x: branchRoot.x + Math.cos(angle) * branchLength * amount,
+          y: branchRoot.y + Math.sin(angle) * branchLength * amount,
+        });
+      }
+      drawCrack(branchPoints, Math.max(2.2, seed.width * 0.42), 0.56);
+    }
+  });
+
+  const texture = new THREE.CanvasTexture(canvas);
+  return configureTexture(texture, renderer);
+}
+
+export default function HeroScene({ onReady, onFocusOverlayChange, onRevealLightChange } = {}) {
   const hostRef = useRef(null);
 
   useEffect(() => {
@@ -133,6 +232,8 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
     const ceramicEdgeTexture = loadImageTexture(CERAMIC_EDGE_TEXTURE, renderer, textureVersion, markTextureLoaded);
     const ritualsTexture = loadSvgTexture(RITUALS_TEXTURE, renderer, textureVersion, 2048);
     const burgerkingTexture = loadSvgTexture(BURGERKING_TEXTURE, renderer, textureVersion, 2048);
+    const lockedTexture = loadSvgTexture(LOCKED_TILE_TEXTURE, renderer, textureVersion, 2048);
+    const crackTexture = createCrackTexture(renderer);
 
     const emptyMaterial = new THREE.MeshBasicMaterial({
       color: '#ffffff',
@@ -170,6 +271,31 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
     const ceramicSideMaterial = new THREE.MeshBasicMaterial({
       color: '#ffffff',
       map: ceramicEdgeTexture,
+      toneMapped: false,
+    });
+    const lockedMaterial = new THREE.MeshBasicMaterial({
+      color: '#ffffff',
+      map: lockedTexture,
+      toneMapped: false,
+      transparent: true,
+      opacity: 1,
+      depthWrite: false,
+    });
+    const revealLightMaterial = new THREE.MeshBasicMaterial({
+      color: '#ffe2a0',
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+    });
+    const crackOverlayMaterial = new THREE.MeshBasicMaterial({
+      color: '#ffffff',
+      map: crackTexture,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
       toneMapped: false,
     });
 
@@ -231,10 +357,19 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
     let viewHeight = 6;
     let tileWidth = 1;
     let tileHeight = 1;
+    let wallLeft = -5;
+    let wallTop = 3;
+    let wallWidth = 10;
+    let wallHeight = 6;
     let freeTileWidth = 1;
     let freeTileHeight = 1;
     let currentBrandWallTile = null;
     let floatingTile = null;
+    let lockedPlate = null;
+    let crackOverlay = null;
+    const revealShards = [];
+    const revealRays = [];
+    const crackLines = [];
     let targetX = 0;
     let targetY = 0;
     let startX = 0;
@@ -247,12 +382,20 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
     let extracting = false;
     let extractProgress = 0;
     let impactTime = null;
+    let introProgress = 0;
+    let introActive = true;
+    let introFlightStarted = false;
+    let introSoundPlayed = false;
+    let revealStageLightVisible = false;
     let overlayOpacity = FOCUS_OVERLAY_OPACITY;
     let audioContext = null;
     let dropBuffer = null;
     let audioLoading = false;
     const droppedTileSounds = new Set();
     const flightDuration = 3.15;
+    const introDelay = 5;
+    const introAnimationDuration = 7.1;
+    const introDuration = introDelay + introAnimationDuration;
     const pointer = { x: 0, y: 0, overTile: false };
     let hoveredWallTileIndex = -1;
     const hoverWorld = { x: 0, y: 0 };
@@ -299,6 +442,14 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
       source.start();
     };
 
+    const setRevealStageLight = (visible) => {
+      if (revealStageLightVisible === visible) return;
+      revealStageLightVisible = visible;
+      onRevealLightChange?.(visible);
+    };
+
+    ensureDropSound();
+
     for (let index = 0; index < TILE_COUNT; index += 1) {
       let material = emptyMaterial;
       if (index === CURRENT_BRAND_INDEX) material = blankMaterial;
@@ -325,10 +476,165 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
     floatingMaterials.forEach((material) => {
       material.transparent = true;
     });
+    floatingMaterials[4].opacity = 0;
+    floatingMaterials[5].opacity = 0;
     floatingTile = new THREE.Mesh(floatingTileGeometry, floatingMaterials);
-    floatingTile.position.z = FREE_TILE_Z;
+    floatingTile.position.z = 0.07;
     floatingTile.renderOrder = 3;
     scene.add(floatingTile);
+
+    lockedPlate = new THREE.Mesh(tileGeometry, lockedMaterial.clone());
+    lockedPlate.position.z = TILE_DEPTH / 2 + 0.008;
+    lockedPlate.renderOrder = 6;
+    floatingTile.add(lockedPlate);
+
+    crackOverlay = new THREE.Mesh(tileGeometry, crackOverlayMaterial.clone());
+    crackOverlay.position.z = TILE_DEPTH / 2 + 0.026;
+    crackOverlay.renderOrder = 10;
+    crackOverlay.visible = false;
+    floatingTile.add(crackOverlay);
+
+    const crackMaterial = new THREE.MeshBasicMaterial({
+      color: '#173f8c',
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      toneMapped: false,
+    });
+
+    const crackSeeds = [
+      { angle: -2.75, length: 0.54 },
+      { angle: -2.18, length: 0.38 },
+      { angle: -1.62, length: 0.55 },
+      { angle: -1.12, length: 0.42 },
+      { angle: -0.56, length: 0.58 },
+      { angle: -0.08, length: 0.46 },
+      { angle: 0.48, length: 0.56 },
+      { angle: 1.02, length: 0.42 },
+      { angle: 1.54, length: 0.54 },
+      { angle: 2.1, length: 0.46 },
+      { angle: 2.64, length: 0.6 },
+    ];
+
+    const createCrackTube = (points, radius, opacityScale = 1) => {
+      const curve = new THREE.CatmullRomCurve3(points);
+      const line = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, radius, 7, false), crackMaterial.clone());
+      line.renderOrder = 9;
+      line.userData.opacityScale = opacityScale;
+      crackLines.push(line);
+      floatingTile.add(line);
+      return line;
+    };
+
+    crackSeeds.forEach((seed, index) => {
+      const points = [];
+      const segmentCount = 6 + (index % 4);
+      for (let step = 0; step <= segmentCount; step += 1) {
+        const amount = step / segmentCount;
+        const kink = Math.sin(step * 2.7 + index) * 0.08 + Math.cos(step * 1.3 + index * 0.7) * 0.035;
+        const angle = seed.angle + kink;
+        const radius = seed.length * amount * (0.9 + Math.sin(amount * Math.PI) * 0.08);
+        points.push(new THREE.Vector3(
+          Math.cos(angle) * radius,
+          Math.sin(angle) * radius,
+          TILE_DEPTH / 2 + 0.018,
+        ));
+      }
+      createCrackTube(points, 0.0105, 1);
+
+      if (index % 2 === 0) {
+        const branchStart = points[Math.floor(points.length * 0.48)];
+        const branchAngle = seed.angle + (index % 4 < 2 ? 1 : -1) * (0.55 + Math.random() * 0.38);
+        const branchLength = seed.length * (0.24 + Math.random() * 0.18);
+        const branchPoints = [branchStart];
+        for (let step = 1; step <= 4; step += 1) {
+          const amount = step / 4;
+          const kink = Math.sin(step * 1.8 + index) * 0.05;
+          branchPoints.push(new THREE.Vector3(
+            branchStart.x + Math.cos(branchAngle + kink) * branchLength * amount,
+            branchStart.y + Math.sin(branchAngle + kink) * branchLength * amount,
+            TILE_DEPTH / 2 + 0.019,
+          ));
+        }
+        createCrackTube(branchPoints, 0.0065, 0.78);
+      }
+    });
+
+    const createShardGeometry = (points) => {
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(points.flatMap((point) => [point.x, point.y, 0]));
+      const uvs = new Float32Array(points.flatMap((point) => [point.x + 0.5, point.y + 0.5]));
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+      geometry.computeVertexNormals();
+      return geometry;
+    };
+
+    const shardCols = 3;
+    const shardRows = 3;
+    for (let row = 0; row < shardRows; row += 1) {
+      for (let col = 0; col < shardCols; col += 1) {
+        const x0 = -0.5 + col / shardCols;
+        const x1 = -0.5 + (col + 1) / shardCols;
+        const y0 = 0.5 - row / shardRows;
+        const y1 = 0.5 - (row + 1) / shardRows;
+        const centerX = (x0 + x1) / 2 + (Math.random() - 0.5) * 0.06;
+        const centerY = (y0 + y1) / 2 + (Math.random() - 0.5) * 0.06;
+        const splitForward = Math.random() > 0.5;
+        const triangles = splitForward
+          ? [
+            [{ x: x0, y: y0 }, { x: x1, y: y0 + Math.random() * 0.035 }, { x: centerX, y: centerY }],
+            [{ x: x1, y: y1 }, { x: x0 + Math.random() * 0.035, y: y1 }, { x: centerX, y: centerY }],
+          ]
+          : [
+            [{ x: x0, y: y1 }, { x: x0, y: y0 - Math.random() * 0.035 }, { x: centerX, y: centerY }],
+            [{ x: x1, y: y0 }, { x: x1, y: y1 + Math.random() * 0.035 }, { x: centerX, y: centerY }],
+          ];
+
+        triangles.forEach((points, triangleIndex) => {
+          const material = lockedMaterial.clone();
+          const shard = new THREE.Mesh(createShardGeometry(points), material);
+          const cx = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+          const cy = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+          const dx = cx + (Math.random() - 0.5) * 0.34;
+          const dy = cy + (Math.random() - 0.5) * 0.34;
+          const length = Math.hypot(dx, dy) || 1;
+          shard.position.set(0, 0, TILE_DEPTH / 2 + 0.011 + triangleIndex * 0.002);
+          shard.renderOrder = 7 + triangleIndex;
+          shard.userData.baseX = 0;
+          shard.userData.baseY = 0;
+          shard.userData.centroidX = cx;
+          shard.userData.centroidY = cy;
+          shard.userData.breakX = (dx / length) * (1.65 + Math.random() * 1.55);
+          shard.userData.breakY = (dy / length) * (1.2 + Math.random() * 1.15);
+          shard.userData.breakZ = 0.28 + Math.random() * 0.38;
+          shard.userData.rotX = (Math.random() - 0.5) * 5.6;
+          shard.userData.rotY = (Math.random() - 0.5) * 5.6;
+          shard.userData.rotZ = (Math.random() - 0.5) * 5.2;
+          revealShards.push(shard);
+          floatingTile.add(shard);
+        });
+      }
+    }
+
+    for (let index = 0; index < 18; index += 1) {
+      const rayLength = 2.2 + Math.random() * 1.5;
+      const rayWidth = 0.08 + Math.random() * 0.18;
+      const rayGeometry = new THREE.BufferGeometry();
+      rayGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+        0, 0, 0,
+        -rayWidth, rayLength, 0,
+        rayWidth, rayLength * (0.82 + Math.random() * 0.28), 0,
+      ]), 3));
+      const ray = new THREE.Mesh(rayGeometry, revealLightMaterial.clone());
+      ray.position.set(0, 0, TILE_DEPTH / 2 + 0.009);
+      ray.rotation.z = (index / 18) * Math.PI * 2 + (Math.random() - 0.5) * 0.18;
+      ray.renderOrder = 5;
+      ray.userData.phase = index * 0.31 + Math.random() * 0.8;
+      ray.userData.baseScale = 0.6 + Math.random() * 0.8;
+      revealRays.push(ray);
+      floatingTile.add(ray);
+    }
 
     const layoutTiles = () => {
       const width = host.clientWidth || 1;
@@ -337,8 +643,12 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
 
       viewWidth = 10;
       viewHeight = viewWidth / aspect;
-      tileWidth = viewWidth / TILE_COLS;
-      tileHeight = viewHeight / TILE_ROWS;
+      wallLeft = -viewWidth / 2 + viewWidth * WALL_VIEWPORT.left;
+      wallTop = viewHeight / 2 - viewHeight * WALL_VIEWPORT.top;
+      wallWidth = viewWidth * WALL_VIEWPORT.width;
+      wallHeight = viewHeight * WALL_VIEWPORT.height;
+      tileWidth = wallWidth / TILE_COLS;
+      tileHeight = wallHeight / TILE_ROWS;
 
       camera.left = -viewWidth / 2;
       camera.right = viewWidth / 2;
@@ -354,8 +664,8 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
       tiles.forEach((mesh, index) => {
         const col = index % TILE_COLS;
         const row = Math.floor(index / TILE_COLS);
-        const x = -viewWidth / 2 + tileWidth * (col + 0.5);
-        const y = viewHeight / 2 - tileHeight * (row + 0.5);
+        const x = wallLeft + tileWidth * (col + 0.5);
+        const y = wallTop - tileHeight * (row + 0.5);
 
         mesh.userData.baseX = x;
         mesh.userData.baseY = y;
@@ -374,10 +684,15 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
       const freeTileBaseSize = Math.min(tileWidth / TILE_ART_ASPECT, tileHeight);
       freeTileWidth = freeTileBaseSize * TILE_ART_ASPECT;
       freeTileHeight = freeTileBaseSize;
-      startY = -viewHeight * 0.04;
+      startY = viewHeight * 0.1;
       if (!inserted && floatingTile) {
-        floatingTile.position.set(startX, startY, FREE_TILE_Z);
-        floatingTile.scale.set(freeTileWidth * FREE_TILE_SCALE, freeTileHeight * FREE_TILE_SCALE, 1);
+        if (introActive) {
+          floatingTile.position.set(targetX, targetY, 0.07);
+          floatingTile.scale.set(tileWidth, tileHeight, 1);
+        } else {
+          floatingTile.position.set(startX, startY, FREE_TILE_Z);
+          floatingTile.scale.set(freeTileWidth * FREE_TILE_SCALE, freeTileHeight * FREE_TILE_SCALE, 1);
+        }
       }
     };
 
@@ -406,8 +721,8 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
     };
 
     const getWallTileIndex = (world) => {
-      const col = Math.floor((world.x + viewWidth / 2) / tileWidth);
-      const row = Math.floor((viewHeight / 2 - world.y) / tileHeight);
+      const col = Math.floor((world.x - wallLeft) / tileWidth);
+      const row = Math.floor((wallTop - world.y) / tileHeight);
 
       if (col < 0 || col >= TILE_COLS || row < 0 || row >= TILE_ROWS) return -1;
       return row * TILE_COLS + col;
@@ -421,6 +736,11 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
         hoverWorld.y = world.y;
         hoveredWallTileIndex = getWallTileIndex(world);
         host.style.cursor = hoveredWallTileIndex === CURRENT_BRAND_INDEX ? 'pointer' : 'default';
+        return;
+      }
+
+      if (introActive) {
+        host.style.cursor = 'default';
         return;
       }
 
@@ -460,7 +780,7 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
     };
 
     const handlePointerDown = (event) => {
-      if (insertionStarted || inserted || extracting) return;
+      if (introActive || insertionStarted || inserted || extracting) return;
 
       const world = clientToWorld(event);
       if (!isInsideFloatingTile(world)) return;
@@ -493,7 +813,7 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
     };
 
     const handleClick = (event) => {
-      if (extracting) return;
+      if (introActive || extracting) return;
 
       const world = clientToWorld(event);
 
@@ -552,6 +872,127 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
       frameId = window.requestAnimationFrame(animate);
       const delta = Math.min(clock.getDelta(), 0.04);
       const elapsed = clock.elapsedTime;
+      let revealDustPulse = 0;
+
+      if (introActive) {
+        introProgress = Math.min(introDuration, introProgress + delta);
+        const introT = THREE.MathUtils.clamp((introProgress - introDelay) / introAnimationDuration, 0, 1);
+        const approachT = THREE.MathUtils.clamp(introT / 0.3, 0, 1);
+        const approachEase = easeInOutCubic(approachT);
+        const crackT = THREE.MathUtils.clamp((introT - 0.3) / 0.44, 0, 1);
+        const breakT = THREE.MathUtils.clamp((introT - 0.7) / 0.26, 0, 1);
+        const revealT = THREE.MathUtils.clamp((introT - 0.68) / 0.12, 0, 1);
+        const fadeOutT = THREE.MathUtils.clamp((introT - 0.68) / 0.1, 0, 1);
+        const lightT = THREE.MathUtils.clamp((introT - 0.56) / 0.34, 0, 1);
+
+        if (breakT > 0.04 && !introSoundPlayed && dropBuffer) {
+          introSoundPlayed = true;
+          audioContext?.resume?.();
+          playDropSound(0.08);
+        }
+
+        if (approachT > 0.03 && !introFlightStarted) {
+          introFlightStarted = true;
+          onFocusOverlayChange?.(true);
+        }
+
+        setRevealStageLight(lightT > 0.08 && introT < 0.96);
+
+        floatingMaterials[4].opacity = smootherStep(revealT);
+        floatingMaterials[5].opacity = smootherStep(approachT);
+        if (lockedPlate) {
+          lockedPlate.material.opacity = 1 - smootherStep(fadeOutT);
+          lockedPlate.visible = lockedPlate.material.opacity > 0.01;
+        }
+
+        if (crackOverlay) {
+          const overlayT = smootherStep(crackT);
+          crackOverlay.material.opacity = overlayT * Math.max(0, 1 - smootherStep(THREE.MathUtils.clamp((introT - 0.74) / 0.14, 0, 1)));
+          crackOverlay.visible = crackOverlay.material.opacity > 0.01;
+          crackOverlay.scale.setScalar(0.04 + overlayT * 1.04);
+        }
+
+        crackLines.forEach((line, index) => {
+          const crackDelay = index * 0.022;
+          const lineT = THREE.MathUtils.clamp((crackT - crackDelay) / 0.72, 0, 1);
+          const lineEase = smootherStep(lineT);
+          line.material.opacity = (0.06 + Math.sin(lineT * Math.PI) * 0.12 + lineEase * 0.2) * line.userData.opacityScale;
+          line.material.opacity *= Math.max(0, 1 - smootherStep(THREE.MathUtils.clamp((introT - 0.72) / 0.16, 0, 1)));
+          line.scale.setScalar(0.03 + lineEase * 1.1);
+          line.visible = line.material.opacity > 0.01;
+        });
+
+        revealShards.forEach((shard, index) => {
+          const localDelay = ((index % 9) * 0.009) + Math.hypot(shard.userData.centroidX, shard.userData.centroidY) * 0.04;
+          const rawShardT = Math.max(0, breakT - localDelay);
+          const shardT = THREE.MathUtils.clamp(rawShardT / 0.34, 0, 1);
+          const shardEase = smootherStep(shardT);
+          const preCrack = Math.sin(elapsed * 32 + index * 0.8) * crackT * 0.012;
+          const blast = (shardEase ** 0.64) + Math.max(0, rawShardT - 0.09) * 2.75;
+          const flutter = Math.sin(elapsed * 14 + index) * 0.026 * blast;
+          shard.position.x = shard.userData.baseX + shard.userData.breakX * blast + preCrack + flutter;
+          shard.position.y = shard.userData.baseY + shard.userData.breakY * blast - preCrack * 0.6 + flutter * 0.45;
+          shard.position.z = TILE_DEPTH / 2 + 0.011 + shard.userData.breakZ * blast;
+          shard.rotation.x = shard.userData.rotX * blast + flutter;
+          shard.rotation.y = shard.userData.rotY * blast;
+          shard.rotation.z = shard.userData.rotZ * blast + preCrack;
+          shard.material.opacity = Math.max(0, 1 - smootherStep(THREE.MathUtils.clamp((introT - 0.9) / 0.1, 0, 1)));
+          shard.visible = shard.material.opacity > 0.01;
+        });
+
+        revealRays.forEach((ray) => {
+          const pulse = Math.sin((lightT * Math.PI) + ray.userData.phase) * 0.5 + 0.5;
+          const burst = Math.sin(lightT * Math.PI);
+          ray.material.opacity = lightT > 0 && lightT < 1 ? (0.025 + pulse * 0.065) * burst : 0;
+          ray.scale.set(ray.userData.baseScale * (0.12 + lightT * 0.65), ray.userData.baseScale * (0.32 + lightT * 0.9), 1);
+          ray.rotation.z += delta * (0.05 + ray.userData.phase * 0.012);
+          ray.visible = ray.material.opacity > 0.01;
+        });
+
+        const shakePulse = Math.sin(Math.min(1, breakT) * Math.PI) * Math.max(0, 1 - THREE.MathUtils.clamp((introT - 0.82) / 0.16, 0, 1));
+        const shakeX = Math.sin(elapsed * 68) * 0.035 * shakePulse;
+        const shakeY = Math.cos(elapsed * 59) * 0.025 * shakePulse;
+
+        revealDustPulse = Math.sin(Math.min(1, breakT) * Math.PI) * 0.42;
+
+        floatingTile.position.x = THREE.MathUtils.lerp(targetX, startX, approachEase) + shakeX;
+        floatingTile.position.y = THREE.MathUtils.lerp(targetY, startY, approachEase) + Math.sin(approachT * Math.PI) * tileHeight * 0.45 + shakeY;
+        floatingTile.position.z = THREE.MathUtils.lerp(0.07, FREE_TILE_Z, approachEase);
+        floatingTile.scale.set(
+          THREE.MathUtils.lerp(tileWidth, freeTileWidth * FREE_TILE_SCALE, smootherStep(approachT)),
+          THREE.MathUtils.lerp(tileHeight, freeTileHeight * FREE_TILE_SCALE, smootherStep(approachT)),
+          1,
+        );
+        floatingTile.rotation.x = 0;
+        floatingTile.rotation.y = Math.sin(approachT * Math.PI) * 0.08;
+        floatingTile.rotation.z = 0;
+
+        if (introProgress >= introDuration) {
+          introActive = false;
+          introFlightStarted = false;
+          setRevealStageLight(false);
+          floatingMaterials[4].opacity = 1;
+          floatingMaterials[5].opacity = 1;
+          if (lockedPlate) lockedPlate.visible = false;
+          revealShards.forEach((shard) => {
+            shard.visible = false;
+            shard.material.opacity = 0;
+          });
+          revealRays.forEach((ray) => {
+            ray.visible = false;
+            ray.material.opacity = 0;
+          });
+          crackLines.forEach((line) => {
+            line.visible = false;
+            line.material.opacity = 0;
+          });
+          if (crackOverlay) {
+            crackOverlay.visible = false;
+            crackOverlay.material.opacity = 0;
+          }
+          host.style.cursor = pointer.overTile ? 'grab' : 'pointer';
+        }
+      }
 
       if (insertionStarted && !inserted) {
         overlayOpacity = THREE.MathUtils.damp(overlayOpacity, 0, 7, delta);
@@ -598,18 +1039,28 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
       const arc = Math.sin(progress * Math.PI);
       const drift = insertionStarted && !extracting ? Math.sin(elapsed * 1.35) * (1 - settle) * 0.035 : 0;
 
-      floatingTile.position.x = THREE.MathUtils.lerp(startX, targetX, eased) + drift;
-      floatingTile.position.y = THREE.MathUtils.lerp(startY, targetY, eased) + arc * tileHeight * 0.52;
-      floatingTile.position.z = THREE.MathUtils.lerp(FREE_TILE_Z, 0.07, eased);
-      floatingTile.rotation.x = THREE.MathUtils.damp(floatingTile.rotation.x, insertionStarted || extracting ? 0 : targetRotation.x, 10, delta);
-      floatingTile.rotation.y = THREE.MathUtils.damp(floatingTile.rotation.y, insertionStarted || extracting ? 0 : targetRotation.y, 10, delta);
-      floatingTile.rotation.z = 0;
-      floatingTile.scale.set(
-        THREE.MathUtils.lerp(freeTileWidth * FREE_TILE_SCALE, tileWidth, settle),
-        THREE.MathUtils.lerp(freeTileHeight * FREE_TILE_SCALE, tileHeight, settle),
-        1,
-      );
+      if (!introActive) {
+        floatingTile.position.x = THREE.MathUtils.lerp(startX, targetX, eased) + drift;
+        floatingTile.position.y = THREE.MathUtils.lerp(startY, targetY, eased) + arc * tileHeight * 0.52;
+        floatingTile.position.z = THREE.MathUtils.lerp(FREE_TILE_Z, 0.07, eased);
+        floatingTile.rotation.x = THREE.MathUtils.damp(floatingTile.rotation.x, insertionStarted || extracting ? 0 : targetRotation.x, 10, delta);
+        floatingTile.rotation.y = THREE.MathUtils.damp(floatingTile.rotation.y, insertionStarted || extracting ? 0 : targetRotation.y, 10, delta);
+        floatingTile.rotation.z = 0;
+        floatingTile.scale.set(
+          THREE.MathUtils.lerp(freeTileWidth * FREE_TILE_SCALE, tileWidth, settle),
+          THREE.MathUtils.lerp(freeTileHeight * FREE_TILE_SCALE, tileHeight, settle),
+          1,
+        );
+      }
       floatingMaterials.forEach((material, index) => {
+        if (introActive && index === 4) {
+          material.transparent = true;
+          return;
+        }
+        if (introActive && index === 5) {
+          material.transparent = true;
+          return;
+        }
         material.opacity = inserted ? Math.max(0, 1 - (elapsed - impactTime) * 3.2) : 1;
         material.transparent = index === 4 || inserted;
       });
@@ -621,15 +1072,15 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
       }
 
       const impactLife = impactTime == null ? -1 : elapsed - impactTime;
-      const particlePulse = impactLife > 0 ? Math.exp(-impactLife * 0.95) : 0;
-      particles.position.x = targetX;
-      particles.position.y = targetY + Math.sin(elapsed * 0.2) * 0.025;
+      const particlePulse = impactLife > 0 ? Math.exp(-impactLife * 0.95) : revealDustPulse;
+      particles.position.x = impactLife > 0 ? targetX : floatingTile.position.x;
+      particles.position.y = (impactLife > 0 ? targetY : floatingTile.position.y) + Math.sin(elapsed * 0.2) * 0.025;
       particles.position.z = 0.02;
       particles.rotation.z = Math.sin(elapsed * 0.32) * 0.08 + Math.max(0, impactLife) * 0.18;
-      const dustScale = impactLife > 0 ? 0.46 + Math.min(impactLife, 2.8) * 0.62 : 0.46;
+      const dustScale = impactLife > 0 ? 0.46 + Math.min(impactLife, 2.8) * 0.62 : 0.58 + revealDustPulse * 0.85;
       particles.scale.setScalar(dustScale);
-      particleMaterial.opacity = particlePulse * 0.58;
-      particleMaterial.size = 0.015 + particlePulse * 0.03;
+      particleMaterial.opacity = particlePulse * (impactLife > 0 ? 0.58 : 0.5);
+      particleMaterial.size = 0.015 + particlePulse * (impactLife > 0 ? 0.03 : 0.022);
 
       if (impactLife > 0 && impactLife < 3.2) {
         shockwave.position.x = targetX;
@@ -721,6 +1172,7 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
       host.removeEventListener('pointercancel', handlePointerUp);
       host.removeEventListener('pointerleave', handlePointerLeave);
       host.removeEventListener('click', handleClick);
+      setRevealStageLight(false);
       renderer.dispose();
       tileGeometry.dispose();
       floatingTileGeometry.dispose();
@@ -729,12 +1181,28 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
       particleMaterial.dispose();
       shockwave.geometry.dispose();
       shockwaveMaterial.dispose();
+      if (lockedPlate) lockedPlate.material.dispose();
+      if (crackOverlay) crackOverlay.material.dispose();
+      revealShards.forEach((shard) => {
+        shard.geometry.dispose();
+        shard.material.dispose();
+      });
+      revealRays.forEach((ray) => {
+        ray.geometry.dispose();
+        ray.material.dispose();
+      });
+      crackLines.forEach((line) => {
+        line.geometry.dispose();
+        line.material.dispose();
+      });
       emptyTexture.dispose();
       currentBrandTexture.dispose();
       tileBackTexture.dispose();
       ceramicEdgeTexture.dispose();
       ritualsTexture.dispose();
       burgerkingTexture.dispose();
+      lockedTexture.dispose();
+      crackTexture.dispose();
       emptyMaterial.dispose();
       blankMaterial.dispose();
       ritualsMaterial.dispose();
@@ -742,6 +1210,9 @@ export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
       currentBrandMaterial.dispose();
       tileBackMaterial.dispose();
       ceramicSideMaterial.dispose();
+      lockedMaterial.dispose();
+      revealLightMaterial.dispose();
+      crackOverlayMaterial.dispose();
       overlayMaterial.dispose();
       currentBrandWallTile.material.dispose();
       floatingMaterials.forEach((material) => material.dispose());
