@@ -18,6 +18,7 @@ export default function DigitalThankYouWall() {
   const [assetsReady, setAssetsReady] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
   const [minimumTimePassed, setMinimumTimePassed] = useState(false);
+  const [focusOverlayVisible, setFocusOverlayVisible] = useState(true);
 
   useEffect(() => {
     fetch('/assets/data/partners.json')
@@ -65,9 +66,15 @@ export default function DigitalThankYouWall() {
       <div className="livewall-stage" aria-label="LiveWall Your Place on the Wall">
         <img className="livewall-room" src={`/assets/figma/livewall-room.png?${CACHE_VERSION}`} alt="" />
         <div className="livewall-title">Your Place on the Wall</div>
+        <div className={`focus-overlay${focusOverlayVisible ? ' focus-overlay-visible' : ''}`} />
         <div className="livewall-wall">
           <Suspense fallback={<div className="loading">Preparing the wall</div>}>
-            <HeroScene partners={partners} primaryPartner={primaryPartner} onReady={handleSceneReady} />
+            <HeroScene
+              partners={partners}
+              primaryPartner={primaryPartner}
+              onReady={handleSceneReady}
+              onFocusOverlayChange={setFocusOverlayVisible}
+            />
           </Suspense>
         </div>
         <img className="livewall-logo" src={`/assets/figma/livewall-logo.png?${CACHE_VERSION}`} alt="LiveWall" />
