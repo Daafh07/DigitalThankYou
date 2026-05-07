@@ -18,7 +18,7 @@ const FREE_TILE_SCALE = 3.75;
 const FREE_TILE_Z = 2.25;
 const TILE_DEPTH = 0.14;
 const TILE_ART_ASPECT = 79 / 82;
-const FOCUS_OVERLAY_OPACITY = 0.18;
+const FOCUS_OVERLAY_OPACITY = 0.22;
 const FIXED_CLIENT_TILES = {
   [CURRENT_BRAND_INDEX - 1]: 'rituals',
   [CURRENT_BRAND_INDEX + 1]: 'burgerking',
@@ -92,7 +92,7 @@ function loadImageTexture(url, renderer, version, onComplete) {
   return configureTexture(texture, renderer);
 }
 
-export default function HeroScene({ onReady } = {}) {
+export default function HeroScene({ onReady, onFocusOverlayChange } = {}) {
   const hostRef = useRef(null);
 
   useEffect(() => {
@@ -181,7 +181,7 @@ export default function HeroScene({ onReady } = {}) {
     const floatingTileGeometry = new THREE.BoxGeometry(1, 1, TILE_DEPTH);
     const overlayGeometry = new THREE.PlaneGeometry(1, 1);
     const overlayMaterial = new THREE.MeshBasicMaterial({
-      color: '#f6fbff',
+      color: '#071326',
       transparent: true,
       opacity: FOCUS_OVERLAY_OPACITY,
       depthWrite: false,
@@ -191,6 +191,41 @@ export default function HeroScene({ onReady } = {}) {
     focusOverlay.position.z = 0.82;
     focusOverlay.renderOrder = 2;
     scene.add(focusOverlay);
+
+    const particleCount = 260;
+    const particlePositions = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = (Math.random() ** 1.8) * 2.8;
+      particlePositions[i * 3] = Math.cos(angle) * radius;
+      particlePositions[i * 3 + 1] = Math.sin(angle) * radius * 0.72;
+      particlePositions[i * 3 + 2] = 0.22 + Math.random() * 0.74;
+    }
+    const particleGeometry = new THREE.BufferGeometry();
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    const particleMaterial = new THREE.PointsMaterial({
+      color: '#dfc179',
+      size: 0.015,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const particles = new THREE.Points(particleGeometry, particleMaterial);
+    particles.renderOrder = 4;
+    scene.add(particles);
+
+    const shockwaveMaterial = new THREE.MeshBasicMaterial({
+      color: '#d1a14a',
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const shockwave = new THREE.Mesh(new THREE.TorusGeometry(1, 0.01, 8, 72), shockwaveMaterial);
+    shockwave.position.z = 0.22;
+    shockwave.renderOrder = 4;
+    scene.add(shockwave);
 
     let viewWidth = 10;
     let viewHeight = 6;
@@ -231,6 +266,7 @@ export default function HeroScene({ onReady } = {}) {
       rotationY: 0,
     };
     const clock = new THREE.Clock();
+    onFocusOverlayChange?.(true);
 
     const ensureDropSound = () => {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -465,6 +501,7 @@ export default function HeroScene({ onReady } = {}) {
         if (getWallTileIndex(world) !== CURRENT_BRAND_INDEX) return;
 
         extracting = true;
+        window.setTimeout(() => onFocusOverlayChange?.(true), 260);
         inserted = false;
         insertionStarted = false;
         insertionFlightReleased = false;
@@ -493,6 +530,7 @@ export default function HeroScene({ onReady } = {}) {
       if (isInsideFloatingTile(world)) return;
 
       insertionStarted = true;
+      onFocusOverlayChange?.(false);
       insertionFlightReleased = false;
       progress = 0;
       ensureDropSound();
@@ -583,59 +621,87 @@ export default function HeroScene({ onReady } = {}) {
       }
 
       const impactLife = impactTime == null ? -1 : elapsed - impactTime;
+      const particlePulse = impactLife > 0 ? Math.exp(-impactLife * 0.95) : 0;
+      particles.position.x = targetX;
+      particles.position.y = targetY + Math.sin(elapsed * 0.2) * 0.025;
+      particles.position.z = 0.02;
+      particles.rotation.z = Math.sin(elapsed * 0.32) * 0.08 + Math.max(0, impactLife) * 0.18;
+      const dustScale = impactLife > 0 ? 0.46 + Math.min(impactLife, 2.8) * 0.62 : 0.46;
+      particles.scale.setScalar(dustScale);
+      particleMaterial.opacity = particlePulse * 0.58;
+      particleMaterial.size = 0.015 + particlePulse * 0.03;
+
+      if (impactLife > 0 && impactLife < 3.2) {
+        shockwave.position.x = targetX;
+        shockwave.position.y = targetY;
+        shockwave.scale.setScalar(0.14 + impactLife * 2.45);
+        shockwaveMaterial.opacity = Math.max(0, 0.34 * (1 - impactLife / 3.2));
+      } else {
+        shockwaveMaterial.opacity = 0;
+      }
+
       tiles.forEach((mesh, index) => {
         const col = index % TILE_COLS;
         const row = Math.floor(index / TILE_COLS);
         const centerCol = CURRENT_BRAND_INDEX % TILE_COLS;
         const centerRow = Math.floor(CURRENT_BRAND_INDEX / TILE_COLS);
         const distance = Math.hypot(col - centerCol, row - centerRow);
-        const wave = impactLife > 0 ? Math.max(0, 1 - Math.abs(impactLife * 2.45 - distance) * 0.95) : 0;
-        const returnMoment = impactLife > 0 && impactLife * 2.45 - distance > 0.42;
+        const waveTravel = impactLife > 0 ? impactLife * 1.85 : -1;
+        const wave = impactLife > 0 ? Math.max(0, 1 - Math.abs(waveTravel - distance) * 0.72) : 0;
+        const returnMoment = impactLife > 0 && waveTravel - distance > 0.42;
         if (returnMoment && !droppedTileSounds.has(index)) {
           droppedTileSounds.add(index);
           playDropSound(index === CURRENT_BRAND_INDEX ? 0.055 : 0.032);
         }
-        const damping = Math.exp(Math.max(0, impactLife) * -0.72);
-        const tremor = Math.sin(impactLife * 31 + distance * 1.9) * wave * damping;
+        const damping = Math.exp(Math.max(0, impactLife) * -0.38);
+        const tremor = Math.sin(impactLife * 25 + distance * 2.2) * wave * damping;
         const radialX = col === centerCol && row === centerRow ? 0 : (col - centerCol) / Math.max(distance, 1);
         const radialY = col === centerCol && row === centerRow ? 0 : (row - centerRow) / Math.max(distance, 1);
-        const push = wave * damping * 0.16;
-        const jitter = tremor * 0.045;
-        const lift = wave * damping * 0.09;
+        const push = wave * damping * 0.24;
+        const jitter = tremor * 0.075;
+        const lift = wave * damping * 0.14;
         const hoverAmount = inserted && hoveredWallTileIndex === index ? 1 : 0;
-        const idleHover = inserted && hoveredWallTileIndex === index ? Math.sin(elapsed * 18 + index) * 0.01 : 0;
+        const tileTremble = hoverAmount ? Math.sin(elapsed * 28 + index * 0.7) * 0.04 : 0;
         let hoverRotX = 0;
         let hoverRotY = 0;
+        let hoverRotZ = 0;
         if (hoverAmount) {
           const relX = THREE.MathUtils.clamp((hoverWorld.x - mesh.userData.baseX) / (tileWidth / 2), -1, 1);
           const relY = THREE.MathUtils.clamp((hoverWorld.y - mesh.userData.baseY) / (tileHeight / 2), -1, 1);
-          hoverRotY = relX * 0.13;
-          hoverRotX = -relY * 0.1;
+          hoverRotY = relX * 0.42 + tileTremble * 0.82;
+          hoverRotX = -relY * 0.31 + tileTremble * 0.62;
+          hoverRotZ = Math.sin(elapsed * 22 + index) * 0.014;
         }
         mesh.position.x = mesh.userData.baseX + radialX * push + jitter;
-        mesh.position.y = mesh.userData.baseY - radialY * push + tremor * 0.012 + idleHover;
-        mesh.position.z = lift + hoverAmount * 0.048;
-        mesh.rotation.x = THREE.MathUtils.damp(mesh.rotation.x, hoverRotX, 10, delta);
-        mesh.rotation.y = THREE.MathUtils.damp(mesh.rotation.y, hoverRotY, 10, delta);
+        mesh.position.y = mesh.userData.baseY - radialY * push + tremor * 0.012;
+        mesh.position.z = lift + hoverAmount * 0.04;
+        mesh.rotation.x = THREE.MathUtils.damp(mesh.rotation.x, hoverRotX, 18, delta);
+        mesh.rotation.y = THREE.MathUtils.damp(mesh.rotation.y, hoverRotY, 18, delta);
+        mesh.rotation.z = THREE.MathUtils.damp(mesh.rotation.z, hoverRotZ, 18, delta);
       });
 
       if (inserted) {
         const hoverAmount = hoveredWallTileIndex === CURRENT_BRAND_INDEX ? 1 : 0;
         let hoverRotX = 0;
         let hoverRotY = 0;
+        let hoverRotZ = 0;
         if (hoverAmount) {
           const relX = THREE.MathUtils.clamp((hoverWorld.x - targetX) / (tileWidth / 2), -1, 1);
           const relY = THREE.MathUtils.clamp((hoverWorld.y - targetY) / (tileHeight / 2), -1, 1);
-          hoverRotY = relX * 0.13;
-          hoverRotX = -relY * 0.1;
+          const tileTremble = Math.sin(elapsed * 28 + CURRENT_BRAND_INDEX * 0.7) * 0.04;
+          hoverRotY = relX * 0.5 + tileTremble;
+          hoverRotX = -relY * 0.38 + tileTremble * 0.75;
+          hoverRotZ = Math.sin(elapsed * 22 + CURRENT_BRAND_INDEX) * 0.018;
         }
-        currentBrandWallTile.position.z = 0.05 + hoverAmount * 0.052;
-        currentBrandWallTile.rotation.x = THREE.MathUtils.damp(currentBrandWallTile.rotation.x, hoverRotX, 10, delta);
-        currentBrandWallTile.rotation.y = THREE.MathUtils.damp(currentBrandWallTile.rotation.y, hoverRotY, 10, delta);
+        currentBrandWallTile.position.z = 0.05 + hoverAmount * 0.045;
+        currentBrandWallTile.rotation.x = THREE.MathUtils.damp(currentBrandWallTile.rotation.x, hoverRotX, 18, delta);
+        currentBrandWallTile.rotation.y = THREE.MathUtils.damp(currentBrandWallTile.rotation.y, hoverRotY, 18, delta);
+        currentBrandWallTile.rotation.z = THREE.MathUtils.damp(currentBrandWallTile.rotation.z, hoverRotZ, 18, delta);
       } else {
         currentBrandWallTile.position.z = 0.05;
         currentBrandWallTile.rotation.x = THREE.MathUtils.damp(currentBrandWallTile.rotation.x, 0, 10, delta);
         currentBrandWallTile.rotation.y = THREE.MathUtils.damp(currentBrandWallTile.rotation.y, 0, 10, delta);
+        currentBrandWallTile.rotation.z = THREE.MathUtils.damp(currentBrandWallTile.rotation.z, 0, 10, delta);
       }
 
       renderer.render(scene, camera);
@@ -659,6 +725,10 @@ export default function HeroScene({ onReady } = {}) {
       tileGeometry.dispose();
       floatingTileGeometry.dispose();
       overlayGeometry.dispose();
+      particleGeometry.dispose();
+      particleMaterial.dispose();
+      shockwave.geometry.dispose();
+      shockwaveMaterial.dispose();
       emptyTexture.dispose();
       currentBrandTexture.dispose();
       tileBackTexture.dispose();

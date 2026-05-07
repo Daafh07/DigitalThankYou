@@ -72,8 +72,24 @@ button {
   top: 14.44%;
   width: 56.04%;
   height: 53.56%;
+  z-index: 3;
   overflow: hidden;
   transform: translateZ(0);
+}
+
+.focus-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(6, 18, 38, 0.14), rgba(6, 18, 38, 0.3) 55%, rgba(6, 18, 38, 0.42) 100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 680ms ease;
+}
+
+.focus-overlay-visible {
+  opacity: 1;
 }
 
 .figma-tile-wall {
@@ -123,7 +139,7 @@ button {
   position: absolute;
   left: 50%;
   top: 12.61%;
-  z-index: 2;
+  z-index: 4;
   transform: translate(-50%, -50%);
   color: rgba(23, 89, 187, 0.72);
   font-family: "Playfair Display", Georgia, serif;
@@ -140,7 +156,7 @@ button {
   position: absolute;
   left: 42.01%;
   top: 69.56%;
-  z-index: 2;
+  z-index: 4;
   width: 16.18%;
   height: 7.56%;
   object-fit: contain;
