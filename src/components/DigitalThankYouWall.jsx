@@ -27,7 +27,15 @@ export default function DigitalThankYouWall() {
 
   useEffect(() => {
     fetch('/assets/data/partners.json')
-      .then((response) => (response.ok ? response.json() : FALLBACK_PARTNERS))
+      .then(async (response) => {
+        if (!response.ok) return FALLBACK_PARTNERS;
+        const raw = await response.text();
+        try {
+          return JSON.parse(raw);
+        } catch (error) {
+          return FALLBACK_PARTNERS;
+        }
+      })
       .then((data) => setPartners(Array.isArray(data) && data.length ? data : FALLBACK_PARTNERS))
       .catch(() => setPartners(FALLBACK_PARTNERS));
   }, []);

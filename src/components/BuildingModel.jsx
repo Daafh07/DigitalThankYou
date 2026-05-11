@@ -19,15 +19,18 @@ export default function BuildingModel({ src = '/assets/models/buildings/Livewall
     renderer.domElement.style.pointerEvents = 'none';
     mount.appendChild(renderer.domElement);
 
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
-    camera.position.set(0, 1.2, 3.4);
-    camera.lookAt(0, 0.9, 0);
+    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
+    camera.position.set(0, 1.35, 4.2);
+    camera.lookAt(0, 1.0, 0);
 
     const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.85);
     scene.add(hemi);
     const dir = new THREE.DirectionalLight(0xffffff, 0.9);
     dir.position.set(5, 10, 7.5);
     scene.add(dir);
+    const frontLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    frontLight.position.set(0, 2, 4);
+    scene.add(frontLight);
 
     const loader = new GLTFLoader();
     let model = null;
@@ -35,19 +38,31 @@ export default function BuildingModel({ src = '/assets/models/buildings/Livewall
       src,
       (gltf) => {
         model = gltf.scene;
+        model.rotation.y = 0.35;
         // basic adjustments: center and scale
         const box = new THREE.Box3().setFromObject(model);
         const size = new THREE.Vector3();
         box.getSize(size);
         const maxDim = Math.max(size.x, size.y, size.z) || 1;
-        const scale = 1.4 / maxDim;
+        const scale = 2.35 / maxDim;
         model.scale.setScalar(scale);
         box.setFromObject(model);
         const center = new THREE.Vector3();
         box.getCenter(center);
         model.position.sub(center);
-        model.position.y += 0.45;
+        model.position.y += 0.12;
         scene.add(model);
+
+        const fittedBox = new THREE.Box3().setFromObject(model);
+        const fittedSize = new THREE.Vector3();
+        fittedBox.getSize(fittedSize);
+        const fittedCenter = new THREE.Vector3();
+        fittedBox.getCenter(fittedCenter);
+        const fittedRadius = Math.max(fittedSize.x, fittedSize.y, fittedSize.z) * 0.5;
+        const fov = (camera.fov * Math.PI) / 180;
+        const distance = fittedRadius / Math.tan(fov / 2);
+        camera.position.set(fittedCenter.x, fittedCenter.y + fittedRadius * 0.1, distance * 1.05);
+        camera.lookAt(fittedCenter.x, fittedCenter.y + fittedRadius * 0.06, fittedCenter.z);
       },
       undefined,
       () => {
