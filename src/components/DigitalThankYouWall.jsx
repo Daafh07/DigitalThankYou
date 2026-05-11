@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import HeroScene from './HeroScene';
+import LoadingAnimation from './LoadingAnimation';
 
 const FALLBACK_PARTNERS = [
   { name: 'Givewall', logo: '/assets/logos/givewall-placeholder.svg', tileStyle: 'classic' },
@@ -30,9 +31,9 @@ export default function DigitalThankYouWall() {
 
   useEffect(() => {
     let cancelled = false;
-    const minimumTimer = window.setTimeout(() => {
-      if (!cancelled) setMinimumTimePassed(true);
-    }, 950);
+    // const minimumTimer = window.setTimeout(() => {
+    //   if (!cancelled) setMinimumTimePassed(true);
+    // }, 950);
 
     const loadImage = (src) => new Promise((resolve) => {
       const image = new Image();
@@ -52,7 +53,7 @@ export default function DigitalThankYouWall() {
 
     return () => {
       cancelled = true;
-      window.clearTimeout(minimumTimer);
+      // window.clearTimeout(minimumTimer);
     };
   }, []);
 
@@ -60,7 +61,11 @@ export default function DigitalThankYouWall() {
   const handleSceneReady = useCallback(() => {
     setSceneReady(true);
   }, []);
+  const handleLoadingComplete = useCallback(() => {
+  setMinimumTimePassed(true);
+}, []);
   const loadingComplete = assetsReady && sceneReady && minimumTimePassed;
+  
 
   return (
     <main className="experience-shell">
@@ -82,9 +87,10 @@ export default function DigitalThankYouWall() {
         </div>
         <img className="livewall-logo" src={`/assets/figma/livewall-logo.png?${CACHE_VERSION}`} alt="LiveWall" />
         <div className={`livewall-loader${loadingComplete ? ' livewall-loader-hidden' : ''}`} aria-hidden={loadingComplete}>
-          <img className="livewall-loader-bg" src={LOADING_BACKGROUND} alt="" />
+          {/* <img className="livewall-loader-bg" src={LOADING_BACKGROUND} alt="" />
           <img className="livewall-loader-logo" src={`/assets/figma/livewall-logo.png?${CACHE_VERSION}`} alt="" />
-          <div className="livewall-loader-line" />
+          <div className="livewall-loader-line" /> */}
+         <LoadingAnimation onComplete={handleLoadingComplete} />
         </div>
       </div>
     </main>
