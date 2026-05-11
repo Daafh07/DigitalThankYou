@@ -349,11 +349,11 @@ export default function HeroScene({ onReady, onFocusOverlayChange, onRevealLight
     particles.renderOrder = 4;
     scene.add(particles);
 
-    // Load optional building GLB model (place your model at /public/assets/models/buildings/Livewall-gebouw.glb)
+    // Load optional building GLB model (place your model at /public/assets/models/building.glb)
     try {
       const gltfLoader = new GLTFLoader();
       gltfLoader.load(
-        '/assets/models/buildings/Livewall-gebouw.glb',
+        '/assets/models/building.glb',
         (gltf) => {
           buildingModel = gltf.scene;
           buildingModel.traverse((node) => {
