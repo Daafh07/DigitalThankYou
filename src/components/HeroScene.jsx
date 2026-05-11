@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 const TILE_COLS = 10;
 const TILE_ROWS = 6;
@@ -191,8 +192,14 @@ function createCrackTexture(renderer) {
   return configureTexture(texture, renderer);
 }
 
-export default function HeroScene({ onReady, onFocusOverlayChange, onRevealLightChange } = {}) {
+export default function HeroScene({ onReady, onFocusOverlayChange, onRevealLightChange, externalFocusOverlayVisible } = {}) {
   const hostRef = useRef(null);
+
+  // allow parent to force the overlay off (used when entering the building)
+  const externalOverlayRef = useRef(externalFocusOverlayVisible ?? true);
+  useEffect(() => {
+    externalOverlayRef.current = externalFocusOverlayVisible ?? true;
+  }, [externalFocusOverlayVisible]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -213,6 +220,7 @@ export default function HeroScene({ onReady, onFocusOverlayChange, onRevealLight
     camera.lookAt(0, 0, 0);
 
     let loadedTextures = 0;
+    let buildingModel = null;
     let firstFrameRendered = false;
     let readyNotified = false;
     const notifyReady = () => {
@@ -340,6 +348,34 @@ export default function HeroScene({ onReady, onFocusOverlayChange, onRevealLight
     const particles = new THREE.Points(particleGeometry, particleMaterial);
     particles.renderOrder = 4;
     scene.add(particles);
+
+    // Load optional building GLB model (place your model at /public/assets/models/buildings/Livewall-gebouw.glb)
+    try {
+      const gltfLoader = new GLTFLoader();
+      gltfLoader.load(
+        '/assets/models/buildings/Livewall-gebouw.glb',
+        (gltf) => {
+          buildingModel = gltf.scene;
+          buildingModel.traverse((node) => {
+            if (node.isMesh) {
+              node.castShadow = false;
+              node.receiveShadow = false;
+              node.frustumCulled = false;
+            }
+          });
+          // Adjust scale/position to taste — these are sensible defaults for the orthographic camera
+          buildingModel.scale.set(1.0, 1.0, 1.0);
+          buildingModel.position.set(0, -1.05, -1.0);
+          scene.add(buildingModel);
+        },
+        undefined,
+        () => {
+          // silently ignore load errors — model is optional
+        },
+      );
+    } catch (e) {
+      // loader not available or failed — continue without model
+    }
 
     const shockwaveMaterial = new THREE.MeshBasicMaterial({
       color: '#d1a14a',
@@ -1032,7 +1068,8 @@ export default function HeroScene({ onReady, onFocusOverlayChange, onRevealLight
       }
 
       overlayMaterial.opacity = overlayOpacity;
-      focusOverlay.visible = overlayOpacity > 0.003;
+      // respect parent-controlled overlay flag so the building entry can't leave a lingering layer
+      focusOverlay.visible = overlayOpacity > 0.003 && externalOverlayRef.current;
 
       const eased = easeInOutCubic(progress);
       const settle = smootherStep(progress);
@@ -1195,6 +1232,23 @@ export default function HeroScene({ onReady, onFocusOverlayChange, onRevealLight
         line.geometry.dispose();
         line.material.dispose();
       });
+      if (buildingModel) {
+        try {
+          scene.remove(buildingModel);
+          buildingModel.traverse((node) => {
+            if (node.isMesh) {
+              if (node.geometry) node.geometry.dispose();
+              if (node.material) {
+                const m = node.material;
+                if (Array.isArray(m)) m.forEach((mm) => mm.dispose());
+                else m.dispose();
+              }
+            }
+          });
+        } catch (e) {
+          // ignore disposal errors
+        }
+      }
       emptyTexture.dispose();
       currentBrandTexture.dispose();
       tileBackTexture.dispose();
