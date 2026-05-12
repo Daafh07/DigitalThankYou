@@ -120,7 +120,9 @@ export default function DigitalThankYouWall() {
           <div className="livewall-loader-line" /> */}
          <LoadingAnimation onComplete={handleLoadingComplete} />
         </div>
-        <div className={`entry-transition${entryTransitionVisible ? ' entry-transition-visible' : ''}`} aria-hidden={!entryTransitionVisible || entryTransitionDone}>
+      </div>
+      <div className={`entry-transition${entryTransitionVisible ? ' entry-transition-visible' : ''}`} aria-hidden={!entryTransitionVisible || entryTransitionDone}>
+        <div className="entry-transition-frame">
           <img className="entry-transition-viewport-bg" src={`/assets/figma/interstitial-bg.png?${CACHE_VERSION}`} alt="" />
           <img className="entry-transition-building" src={`/assets/figma/interstitial-building.png?${CACHE_VERSION}`} alt="" />
           <img className="entry-transition-logo" src={`/assets/figma/interstitial-logo.png?${CACHE_VERSION}`} alt="" />
