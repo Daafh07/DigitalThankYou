@@ -2,7 +2,6 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import HeroScene from './HeroScene';
-import BuildingModel from './BuildingModel';
 
 const FALLBACK_PARTNERS = [
   { name: 'Givewall', logo: '/assets/logos/givewall-placeholder.svg', tileStyle: 'classic' },
@@ -27,15 +26,7 @@ export default function DigitalThankYouWall() {
 
   useEffect(() => {
     fetch('/assets/data/partners.json')
-      .then(async (response) => {
-        if (!response.ok) return FALLBACK_PARTNERS;
-        const raw = await response.text();
-        try {
-          return JSON.parse(raw);
-        } catch (error) {
-          return FALLBACK_PARTNERS;
-        }
-      })
+      .then((response) => (response.ok ? response.json() : FALLBACK_PARTNERS))
       .then((data) => setPartners(Array.isArray(data) && data.length ? data : FALLBACK_PARTNERS))
       .catch(() => setPartners(FALLBACK_PARTNERS));
   }, []);
@@ -73,14 +64,6 @@ export default function DigitalThankYouWall() {
     setSceneReady(true);
   }, []);
   const loadingComplete = assetsReady && sceneReady && minimumTimePassed;
-
-  const replayEntrance = useCallback(() => {
-    setEntryTransitionDone(false);
-    setEntryTransitionVisible(true);
-    setBuildingEntered(false);
-    setFocusOverlayVisible(true);
-    setRevealLightVisible(false);
-  }, []);
 
   useEffect(() => {
     if (!loadingComplete || entryTransitionDone) return undefined;
@@ -120,7 +103,6 @@ export default function DigitalThankYouWall() {
           </Suspense>
         </div>
         <img className="livewall-logo" src={`/assets/figma/livewall-logo.png?${CACHE_VERSION}`} alt="LiveWall" />
-        <button type="button" className="replay-entrance" onClick={replayEntrance} aria-label="Replay entrance">Replay</button>
         <div className={`livewall-loader${loadingComplete ? ' livewall-loader-hidden' : ''}`} aria-hidden={loadingComplete}>
           <img className="livewall-loader-bg" src={LOADING_BACKGROUND} alt="" />
           <img className="livewall-loader-logo" src={`/assets/figma/livewall-logo.png?${CACHE_VERSION}`} alt="" />
@@ -130,7 +112,34 @@ export default function DigitalThankYouWall() {
           <div className="entry-transition-paper" />
           <div className="entry-transition-skywash" />
           <div className="entry-transition-building">
-            <BuildingModel />
+            <div className="entry-transition-roof" />
+            <div className="entry-transition-roof-top" />
+            <div className="entry-transition-wings entry-transition-wings-left" />
+            <div className="entry-transition-wings entry-transition-wings-right" />
+            <div className="entry-transition-facade">
+              <div className="entry-transition-upper-row">
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
+              <div className="entry-transition-lower-row">
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
+              <div className="entry-transition-door">
+                <div className="entry-transition-door-panel" />
+                <div className="entry-transition-door-window" />
+              </div>
+              <div className="entry-transition-balcony" />
+            </div>
+            <div className="entry-transition-column entry-transition-column-left" />
+            <div className="entry-transition-column entry-transition-column-right" />
+            <div className="entry-transition-focus" />
           </div>
         </div>
       </div>
