@@ -7,6 +7,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 const TILE_COLS = 10;
 const TILE_ROWS = 6;
 const TILE_COUNT = TILE_COLS * TILE_ROWS;
+const REQUIRED_TEXTURE_COUNT = 7;
 const CURRENT_BRAND_INDEX = 24;
 const EMPTY_TILE_TEXTURE = '/assets/textures/emptytile.svg';
 const CURRENT_BRAND_TEXTURE = '/assets/textures/currentbrand.svg';
@@ -198,10 +199,12 @@ export default function HeroScene({
   onRevealLightChange,
   externalFocusOverlayVisible,
   startIntro = true,
+  startWallEntrance = false,
   onStartIntroRequest,
 } = {}) {
   const hostRef = useRef(null);
   const startIntroRef = useRef(startIntro);
+  const startWallEntranceRef = useRef(startWallEntrance);
 
   // allow parent to force the overlay off (used when entering the building)
   const externalOverlayRef = useRef(externalFocusOverlayVisible ?? true);
@@ -211,6 +214,9 @@ export default function HeroScene({
   useEffect(() => {
     startIntroRef.current = startIntro;
   }, [startIntro]);
+  useEffect(() => {
+    startWallEntranceRef.current = startWallEntrance;
+  }, [startWallEntrance]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -226,9 +232,15 @@ export default function HeroScene({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     host.appendChild(renderer.domElement);
 
-    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 20);
-    camera.position.set(0, 0, 10);
-    camera.lookAt(0, 0, 0);
+    const orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 20);
+    orthoCamera.position.set(0, 0, 10);
+    orthoCamera.lookAt(0, 0, 0);
+
+    const perspCamera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
+    perspCamera.position.set(0, 0, 10);
+    perspCamera.lookAt(0, 0, 0);
+
+    let camera = orthoCamera;
 
     let loadedTextures = 0;
     let buildingModel = null;
@@ -319,6 +331,7 @@ export default function HeroScene({
     });
 
     const wallGroup = new THREE.Group();
+    wallGroup.visible = false;
     scene.add(wallGroup);
 
     const tiles = [];
@@ -434,6 +447,9 @@ export default function HeroScene({
     let introFlightStarted = false;
     let introSoundPlayed = false;
     let revealStageLightVisible = false;
+    let wallEntranceActive = false;
+    let wallEntranceComplete = false;
+    let wallEntranceStartedAt = 0;
     let overlayOpacity = FOCUS_OVERLAY_OPACITY;
     let audioContext = null;
     let dropBuffer = null;
@@ -507,6 +523,14 @@ export default function HeroScene({
       tiles.push(mesh);
     }
 
+    const tileRng = tiles.map(() => ({
+      delay: Math.random(),
+      duration: Math.random(),
+      offsetX: (Math.random() - 0.5),
+      offsetY: (Math.random() - 0.5),
+      fromZ: Math.random(),
+    }));
+
     currentBrandWallTile = new THREE.Mesh(tileGeometry, currentBrandMaterial.clone());
     currentBrandWallTile.material.opacity = 0;
     currentBrandWallTile.position.z = 0.05;
@@ -528,6 +552,7 @@ export default function HeroScene({
     floatingTile = new THREE.Mesh(floatingTileGeometry, floatingMaterials);
     floatingTile.position.z = 0.07;
     floatingTile.renderOrder = 3;
+    floatingTile.visible = false;
     scene.add(floatingTile);
 
     lockedPlate = new THREE.Mesh(tileGeometry, lockedMaterial.clone());
@@ -684,9 +709,14 @@ export default function HeroScene({
     }
 
     const layoutTiles = () => {
-      const width = host.clientWidth || 1;
-      const height = host.clientHeight || 1;
-      const aspect = width / height;
+      const renderWidth = host.clientWidth || 1;
+      const renderHeight = host.clientHeight || 1;
+
+      // grid always based on the wall container so flying canvas doesn't shift tile positions
+      const wallContainer = host.parentElement || host;
+      const gridWidth = wallContainer.clientWidth || renderWidth;
+      const gridHeight = wallContainer.clientHeight || renderHeight;
+      const aspect = gridWidth / gridHeight;
 
       viewWidth = 10;
       viewHeight = viewWidth / aspect;
@@ -697,13 +727,17 @@ export default function HeroScene({
       tileWidth = wallWidth / TILE_COLS;
       tileHeight = wallHeight / TILE_ROWS;
 
-      camera.left = -viewWidth / 2;
-      camera.right = viewWidth / 2;
-      camera.top = viewHeight / 2;
-      camera.bottom = -viewHeight / 2;
-      camera.updateProjectionMatrix();
+      orthoCamera.left = -viewWidth / 2;
+      orthoCamera.right = viewWidth / 2;
+      orthoCamera.top = viewHeight / 2;
+      orthoCamera.bottom = -viewHeight / 2;
+      orthoCamera.updateProjectionMatrix();
 
-      renderer.setSize(width, height, false);
+      perspCamera.aspect = renderWidth / renderHeight;
+      perspCamera.fov = (2 * Math.atan(viewHeight / 2 / 10) * 180) / Math.PI;
+      perspCamera.updateProjectionMatrix();
+
+      renderer.setSize(renderWidth, renderHeight, false);
       renderer.domElement.style.width = '100%';
       renderer.domElement.style.height = '100%';
       focusOverlay.scale.set(viewWidth, viewHeight, 1);
@@ -716,6 +750,12 @@ export default function HeroScene({
 
         mesh.userData.baseX = x;
         mesh.userData.baseY = y;
+        const rng = tileRng[index];
+        mesh.userData.entranceDelay = 0.2 + rng.delay * 2.8;
+        mesh.userData.entranceDuration = 1.4 + rng.duration * 1.0;
+        mesh.userData.entranceFromX = x + rng.offsetX * viewWidth * 0.6;
+        mesh.userData.entranceFromY = y + rng.offsetY * viewHeight * 0.6;
+        mesh.userData.entranceFromZ = 9.82 - rng.fromZ * 0.1;
         mesh.position.set(x, y, 0);
         mesh.scale.set(tileWidth, tileHeight, 1);
 
@@ -724,6 +764,11 @@ export default function HeroScene({
           targetY = y;
           currentBrandWallTile.position.set(x, y, 0.05);
           currentBrandWallTile.scale.set(tileWidth, tileHeight, 1);
+          currentBrandWallTile.userData.entranceDelay = mesh.userData.entranceDelay;
+          currentBrandWallTile.userData.entranceDuration = mesh.userData.entranceDuration;
+          currentBrandWallTile.userData.entranceFromX = mesh.userData.entranceFromX;
+          currentBrandWallTile.userData.entranceFromY = mesh.userData.entranceFromY;
+          currentBrandWallTile.userData.entranceFromZ = mesh.userData.entranceFromZ;
         }
       });
 
@@ -736,6 +781,11 @@ export default function HeroScene({
         if (introActive) {
           floatingTile.position.set(targetX, targetY, 0.07);
           floatingTile.scale.set(tileWidth, tileHeight, 1);
+          floatingTile.userData.entranceDelay = currentBrandWallTile.userData.entranceDelay ?? 0.2;
+          floatingTile.userData.entranceDuration = currentBrandWallTile.userData.entranceDuration ?? 1.7;
+          floatingTile.userData.entranceFromX = currentBrandWallTile.userData.entranceFromX ?? targetX;
+          floatingTile.userData.entranceFromY = currentBrandWallTile.userData.entranceFromY ?? targetY;
+          floatingTile.userData.entranceFromZ = currentBrandWallTile.userData.entranceFromZ ?? 9.82;
         } else {
           floatingTile.position.set(startX, startY, FREE_TILE_Z);
           floatingTile.scale.set(freeTileWidth * FREE_TILE_SCALE, freeTileHeight * FREE_TILE_SCALE, 1);
@@ -933,6 +983,51 @@ export default function HeroScene({
       const elapsed = clock.elapsedTime;
       let revealDustPulse = 0;
 
+      if (startWallEntranceRef.current && !wallEntranceActive && !wallEntranceComplete) {
+        wallEntranceActive = true;
+        wallEntranceStartedAt = elapsed + 0.08;
+        wallGroup.visible = true;
+        floatingTile.visible = true;
+        emptyMaterial.opacity = 1;
+        blankMaterial.opacity = 1;
+        ritualsMaterial.opacity = 1;
+        burgerkingMaterial.opacity = 1;
+        lockedPlate.material.opacity = 1;
+        lockedPlate.visible = true;
+        camera = perspCamera;
+        host.classList.add('webgl-tile-wall--flying');
+        layoutTiles();
+      }
+
+      const wallEntranceElapsed = wallEntranceActive || wallEntranceComplete ? elapsed - wallEntranceStartedAt : -1;
+      if (wallEntranceActive && wallEntranceElapsed > 4.2) {
+        wallEntranceActive = false;
+        wallEntranceComplete = true;
+        camera = orthoCamera;
+        host.classList.remove('webgl-tile-wall--flying');
+        layoutTiles();
+        host.style.cursor = introActive ? 'default' : 'pointer';
+      }
+
+      if (introActive && !startIntroRef.current && floatingTile.visible && wallEntranceActive) {
+        const localT = THREE.MathUtils.clamp(
+          (wallEntranceElapsed - (floatingTile.userData.entranceDelay ?? 0.2)) / (floatingTile.userData.entranceDuration ?? 1.7),
+          0, 1,
+        );
+        const entranceEase = smootherStep(localT);
+        floatingTile.position.x = THREE.MathUtils.lerp(floatingTile.userData.entranceFromX ?? targetX, targetX, entranceEase);
+        floatingTile.position.y = THREE.MathUtils.lerp(floatingTile.userData.entranceFromY ?? targetY, targetY, entranceEase);
+        floatingTile.position.z = THREE.MathUtils.lerp(floatingTile.userData.entranceFromZ ?? 9.82, 0.07, entranceEase);
+        floatingTile.rotation.x = (1 - entranceEase) * -0.18;
+        floatingTile.rotation.y = (1 - entranceEase) * 0.12;
+        floatingTile.rotation.z = (1 - entranceEase) * 0.04;
+        floatingTile.scale.set(tileWidth, tileHeight, 1);
+        if (lockedPlate) {
+          lockedPlate.material.opacity = entranceEase;
+          lockedPlate.visible = entranceEase > 0.01;
+        }
+      }
+
       if (introActive && startIntroRef.current) {
         introProgress = Math.min(introDuration, introProgress + delta);
         const introT = THREE.MathUtils.clamp((introProgress - introDelay) / introAnimationDuration, 0, 1);
@@ -1092,7 +1187,7 @@ export default function HeroScene({
 
       overlayMaterial.opacity = overlayOpacity;
       // respect parent-controlled overlay flag so the building entry can't leave a lingering layer
-      focusOverlay.visible = overlayOpacity > 0.003 && externalOverlayRef.current;
+      focusOverlay.visible = overlayOpacity > 0.003 && externalOverlayRef.current && wallEntranceComplete;
 
       const eased = easeInOutCubic(progress);
       const settle = smootherStep(progress);
@@ -1183,12 +1278,33 @@ export default function HeroScene({
           hoverRotX = -relY * 0.31 + tileTremble * 0.62;
           hoverRotZ = Math.sin(elapsed * 22 + index) * 0.014;
         }
-        mesh.position.x = mesh.userData.baseX + radialX * push + jitter;
-        mesh.position.y = mesh.userData.baseY - radialY * push + tremor * 0.012;
-        mesh.position.z = lift + hoverAmount * 0.04;
-        mesh.rotation.x = THREE.MathUtils.damp(mesh.rotation.x, hoverRotX, 18, delta);
-        mesh.rotation.y = THREE.MathUtils.damp(mesh.rotation.y, hoverRotY, 18, delta);
-        mesh.rotation.z = THREE.MathUtils.damp(mesh.rotation.z, hoverRotZ, 18, delta);
+        let entranceX = mesh.userData.baseX;
+        let entranceY = mesh.userData.baseY;
+        let entranceZ = 0;
+        let entranceRotX = 0;
+        let entranceRotY = 0;
+        let entranceRotZ = 0;
+        if (!wallEntranceComplete) {
+          const localT = THREE.MathUtils.clamp(
+            (wallEntranceElapsed - mesh.userData.entranceDelay) / mesh.userData.entranceDuration,
+            0, 1,
+          );
+          const entranceEase = smootherStep(localT);
+          const settleZ = Math.sin(localT * Math.PI) * 0.05;
+          entranceX = THREE.MathUtils.lerp(mesh.userData.entranceFromX, mesh.userData.baseX, entranceEase);
+          entranceY = THREE.MathUtils.lerp(mesh.userData.entranceFromY, mesh.userData.baseY, entranceEase);
+          entranceZ = THREE.MathUtils.lerp(mesh.userData.entranceFromZ, 0, entranceEase) + settleZ;
+          entranceRotX = (1 - entranceEase) * ((row - (TILE_ROWS - 1) / 2) * 0.04);
+          entranceRotY = (1 - entranceEase) * ((col - (TILE_COLS - 1) / 2) * 0.04);
+          entranceRotZ = (1 - entranceEase) * ((index % 3 - 1) * 0.015);
+        }
+        mesh.position.x = entranceX + radialX * push + jitter;
+        mesh.position.y = entranceY - radialY * push + tremor * 0.012;
+        mesh.position.z = entranceZ + lift + hoverAmount * 0.04;
+        mesh.scale.set(tileWidth, tileHeight, 1);
+        mesh.rotation.x = THREE.MathUtils.damp(mesh.rotation.x, entranceRotX + hoverRotX, 18, delta);
+        mesh.rotation.y = THREE.MathUtils.damp(mesh.rotation.y, entranceRotY + hoverRotY, 18, delta);
+        mesh.rotation.z = THREE.MathUtils.damp(mesh.rotation.z, entranceRotZ + hoverRotZ, 18, delta);
       });
 
       if (inserted) {
