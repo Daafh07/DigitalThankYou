@@ -263,9 +263,11 @@ button {
 }
 
 .entry-transition {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 18;
+  overflow: hidden;
+  background: #f7fbff;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -279,6 +281,16 @@ button {
   visibility: visible;
 }
 
+.entry-transition-frame {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: max(100vw, 150vh);
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  transform: translateX(-50%);
+}
+
 .entry-transition-viewport-bg {
   position: absolute;
   inset: 0;
@@ -286,27 +298,25 @@ button {
   height: 100%;
   object-fit: cover;
   object-position: center;
+  pointer-events: none;
 }
 
 .entry-transition-building {
   position: absolute;
-  left: 50%;
-  top: 57%;
-  width: min(92vw, 1180px);
-  height: min(68vw, 810px);
-  max-height: 74vh;
-  object-fit: contain;
-  transform: translate(-50%, -50%);
-  filter: drop-shadow(0 28px 34px rgba(23, 58, 119, 0.18));
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
   pointer-events: none;
 }
 
 .entry-transition-logo {
   position: absolute;
   left: 50%;
-  top: 20px;
+  top: 1.95%;
   transform: translateX(-50%);
-  width: min(19.7vw, 303px);
+  width: 19.73%;
   height: auto;
   object-fit: contain;
   pointer-events: none;
@@ -315,7 +325,7 @@ button {
 .entry-transition-title {
   position: absolute;
   left: 50%;
-  top: 121px;
+  top: 11.82%;
   transform: translateX(-50%);
   color: #1759bb;
   font-family: "Playfair Display", Georgia, serif;
@@ -326,10 +336,8 @@ button {
 }
 
 @media (max-width: 900px) {
-  .entry-transition-building {
-    top: 59%;
-    width: min(96vw, 900px);
-    height: min(72vw, 760px);
+  .entry-transition-frame {
+    width: max(100vw, 150vh);
   }
 }
 
