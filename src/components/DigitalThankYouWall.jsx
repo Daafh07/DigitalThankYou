@@ -19,6 +19,9 @@ export default function DigitalThankYouWall() {
   const [assetsReady, setAssetsReady] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
   const [minimumTimePassed, setMinimumTimePassed] = useState(false);
+  const [entryTransitionVisible, setEntryTransitionVisible] = useState(false);
+  const [entryTransitionDone, setEntryTransitionDone] = useState(false);
+  const [buildingEntered, setBuildingEntered] = useState(false);
   const [focusOverlayVisible, setFocusOverlayVisible] = useState(true);
   const [revealLightVisible, setRevealLightVisible] = useState(false);
 
@@ -67,14 +70,32 @@ export default function DigitalThankYouWall() {
   const loadingComplete = assetsReady && sceneReady && minimumTimePassed;
   
 
+  useEffect(() => {
+    if (!loadingComplete || entryTransitionDone) return undefined;
+
+    setEntryTransitionVisible(true);
+    const transitionTimer = window.setTimeout(() => {
+      setEntryTransitionDone(true);
+      setEntryTransitionVisible(false);
+      setBuildingEntered(true);
+      // hide the overlays when the entry animation finishes so the room with the wall is visible
+      setFocusOverlayVisible(false);
+      setRevealLightVisible(false);
+    }, 3800);
+
+    return () => {
+      window.clearTimeout(transitionTimer);
+    };
+  }, [entryTransitionDone, loadingComplete]);
+
   return (
     <main className="experience-shell">
       <div className="livewall-stage" aria-label="LiveWall Your Place on the Wall">
         <img className="livewall-room" src={`/assets/figma/livewall-room.png?${CACHE_VERSION}`} alt="" />
         <div className="livewall-title">Your Place on the Wall</div>
-        <div className={`focus-overlay${focusOverlayVisible ? ' focus-overlay-visible' : ''}`} />
-        <div className={`reveal-light-overlay${revealLightVisible ? ' reveal-light-overlay-visible' : ''}`} />
-        <div className="livewall-wall">
+        <div className={`focus-overlay${focusOverlayVisible && !buildingEntered ? ' focus-overlay-visible' : ''}`} />
+        <div className={`reveal-light-overlay${revealLightVisible && !buildingEntered ? ' reveal-light-overlay-visible' : ''}`} />
+        <div className={`livewall-wall${buildingEntered ? ' livewall-wall-visible' : ''}`}>
           <Suspense fallback={<div className="loading">Preparing the wall</div>}>
             <HeroScene
               partners={partners}
@@ -82,6 +103,7 @@ export default function DigitalThankYouWall() {
               onReady={handleSceneReady}
               onFocusOverlayChange={setFocusOverlayVisible}
               onRevealLightChange={setRevealLightVisible}
+              externalFocusOverlayVisible={focusOverlayVisible && !buildingEntered}
             />
           </Suspense>
         </div>
@@ -91,6 +113,40 @@ export default function DigitalThankYouWall() {
           <img className="livewall-loader-logo" src={`/assets/figma/livewall-logo.png?${CACHE_VERSION}`} alt="" />
           <div className="livewall-loader-line" /> */}
          <LoadingAnimation onComplete={handleLoadingComplete} />
+        </div>
+        <div className={`entry-transition${entryTransitionVisible ? ' entry-transition-visible' : ''}`} aria-hidden={!entryTransitionVisible || entryTransitionDone}>
+          <div className="entry-transition-paper" />
+          <div className="entry-transition-skywash" />
+          <div className="entry-transition-building">
+            <div className="entry-transition-roof" />
+            <div className="entry-transition-roof-top" />
+            <div className="entry-transition-wings entry-transition-wings-left" />
+            <div className="entry-transition-wings entry-transition-wings-right" />
+            <div className="entry-transition-facade">
+              <div className="entry-transition-upper-row">
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
+              <div className="entry-transition-lower-row">
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
+              <div className="entry-transition-door">
+                <div className="entry-transition-door-panel" />
+                <div className="entry-transition-door-window" />
+              </div>
+              <div className="entry-transition-balcony" />
+            </div>
+            <div className="entry-transition-column entry-transition-column-left" />
+            <div className="entry-transition-column entry-transition-column-right" />
+            <div className="entry-transition-focus" />
+          </div>
         </div>
       </div>
     </main>
