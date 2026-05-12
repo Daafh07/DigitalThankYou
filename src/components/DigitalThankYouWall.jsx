@@ -22,6 +22,7 @@ export default function DigitalThankYouWall() {
   const [entryTransitionVisible, setEntryTransitionVisible] = useState(false);
   const [entryTransitionDone, setEntryTransitionDone] = useState(false);
   const [buildingEntered, setBuildingEntered] = useState(false);
+  const [wallAnimationStarted, setWallAnimationStarted] = useState(false);
   const [focusOverlayVisible, setFocusOverlayVisible] = useState(true);
   const [revealLightVisible, setRevealLightVisible] = useState(false);
 
@@ -82,7 +83,6 @@ export default function DigitalThankYouWall() {
       setFocusOverlayVisible(false);
       setRevealLightVisible(false);
     }, 3800);
-
     return () => {
       window.clearTimeout(transitionTimer);
     };
@@ -104,6 +104,8 @@ export default function DigitalThankYouWall() {
               onFocusOverlayChange={setFocusOverlayVisible}
               onRevealLightChange={setRevealLightVisible}
               externalFocusOverlayVisible={focusOverlayVisible && !buildingEntered}
+              startIntro={wallAnimationStarted}
+              onStartIntroRequest={() => setWallAnimationStarted(true)}
             />
           </Suspense>
         </div>

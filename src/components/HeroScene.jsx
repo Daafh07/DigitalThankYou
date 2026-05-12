@@ -192,14 +192,25 @@ function createCrackTexture(renderer) {
   return configureTexture(texture, renderer);
 }
 
-export default function HeroScene({ onReady, onFocusOverlayChange, onRevealLightChange, externalFocusOverlayVisible } = {}) {
+export default function HeroScene({
+  onReady,
+  onFocusOverlayChange,
+  onRevealLightChange,
+  externalFocusOverlayVisible,
+  startIntro = true,
+  onStartIntroRequest,
+} = {}) {
   const hostRef = useRef(null);
+  const startIntroRef = useRef(startIntro);
 
   // allow parent to force the overlay off (used when entering the building)
   const externalOverlayRef = useRef(externalFocusOverlayVisible ?? true);
   useEffect(() => {
     externalOverlayRef.current = externalFocusOverlayVisible ?? true;
   }, [externalFocusOverlayVisible]);
+  useEffect(() => {
+    startIntroRef.current = startIntro;
+  }, [startIntro]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -776,7 +787,7 @@ export default function HeroScene({ onReady, onFocusOverlayChange, onRevealLight
       }
 
       if (introActive) {
-        host.style.cursor = 'default';
+        host.style.cursor = !startIntroRef.current && isInsideFloatingTile(world) ? 'pointer' : 'default';
         return;
       }
 
@@ -849,9 +860,21 @@ export default function HeroScene({ onReady, onFocusOverlayChange, onRevealLight
     };
 
     const handleClick = (event) => {
-      if (introActive || extracting) return;
-
       const world = clientToWorld(event);
+      if (introActive) {
+        if (!startIntroRef.current && isInsideFloatingTile(world)) {
+          startIntroRef.current = true;
+          introProgress = introDelay;
+          ensureDropSound();
+          audioContext?.resume?.();
+          clock.getDelta();
+          onStartIntroRequest?.();
+          host.style.cursor = 'default';
+        }
+        return;
+      }
+
+      if (extracting) return;
 
       if (inserted) {
         if (getWallTileIndex(world) !== CURRENT_BRAND_INDEX) return;
@@ -910,7 +933,7 @@ export default function HeroScene({ onReady, onFocusOverlayChange, onRevealLight
       const elapsed = clock.elapsedTime;
       let revealDustPulse = 0;
 
-      if (introActive) {
+      if (introActive && startIntroRef.current) {
         introProgress = Math.min(introDuration, introProgress + delta);
         const introT = THREE.MathUtils.clamp((introProgress - introDelay) / introAnimationDuration, 0, 1);
         const approachT = THREE.MathUtils.clamp(introT / 0.3, 0, 1);
