@@ -11,7 +11,7 @@ const FALLBACK_PARTNERS = [
   { name: 'Museum Circle', logo: '/assets/logos/partner-placeholder.svg', tileStyle: 'classic' },
 ];
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v3';
 const LOADING_BACKGROUND = `/assets/figma/achtergrondloading.svg?${CACHE_VERSION}`;
 
 export default function DigitalThankYouWall() {
@@ -49,7 +49,10 @@ export default function DigitalThankYouWall() {
 
     Promise.all([
       loadImage(`/assets/figma/livewall-room.png?${CACHE_VERSION}`),
-      loadImage(`/assets/figma/livewall-logo.png?${CACHE_VERSION}`),
+      loadImage(`/assets/figma/livewall-logo-text-only.png?${CACHE_VERSION}`),
+      loadImage(`/assets/figma/interstitial-bg.png?${CACHE_VERSION}`),
+      loadImage(`/assets/figma/interstitial-building.png?${CACHE_VERSION}`),
+      loadImage(`/assets/figma/interstitial-logo.png?${CACHE_VERSION}`),
       loadImage(LOADING_BACKGROUND),
     ]).then(() => {
       if (!cancelled) setAssetsReady(true);
@@ -105,11 +108,12 @@ export default function DigitalThankYouWall() {
               onRevealLightChange={setRevealLightVisible}
               externalFocusOverlayVisible={focusOverlayVisible && !buildingEntered}
               startIntro={wallAnimationStarted}
+              startWallEntrance={buildingEntered}
               onStartIntroRequest={() => setWallAnimationStarted(true)}
             />
           </Suspense>
         </div>
-        <img className="livewall-logo" src={`/assets/figma/livewall-logo.png?${CACHE_VERSION}`} alt="LiveWall" />
+        <img className="livewall-logo" src={`/assets/figma/livewall-logo-text-only.png?${CACHE_VERSION}`} alt="LiveWall" />
         <div className={`livewall-loader${loadingComplete ? ' livewall-loader-hidden' : ''}`} aria-hidden={loadingComplete}>
           {/* <img className="livewall-loader-bg" src={LOADING_BACKGROUND} alt="" />
           <img className="livewall-loader-logo" src={`/assets/figma/livewall-logo.png?${CACHE_VERSION}`} alt="" />
@@ -117,38 +121,10 @@ export default function DigitalThankYouWall() {
          <LoadingAnimation onComplete={handleLoadingComplete} />
         </div>
         <div className={`entry-transition${entryTransitionVisible ? ' entry-transition-visible' : ''}`} aria-hidden={!entryTransitionVisible || entryTransitionDone}>
-          <div className="entry-transition-paper" />
-          <div className="entry-transition-skywash" />
-          <div className="entry-transition-building">
-            <div className="entry-transition-roof" />
-            <div className="entry-transition-roof-top" />
-            <div className="entry-transition-wings entry-transition-wings-left" />
-            <div className="entry-transition-wings entry-transition-wings-right" />
-            <div className="entry-transition-facade">
-              <div className="entry-transition-upper-row">
-                <span />
-                <span />
-                <span />
-                <span />
-                <span />
-              </div>
-              <div className="entry-transition-lower-row">
-                <span />
-                <span />
-                <span />
-                <span />
-                <span />
-              </div>
-              <div className="entry-transition-door">
-                <div className="entry-transition-door-panel" />
-                <div className="entry-transition-door-window" />
-              </div>
-              <div className="entry-transition-balcony" />
-            </div>
-            <div className="entry-transition-column entry-transition-column-left" />
-            <div className="entry-transition-column entry-transition-column-right" />
-            <div className="entry-transition-focus" />
-          </div>
+          <img className="entry-transition-viewport-bg" src={`/assets/figma/interstitial-bg.png?${CACHE_VERSION}`} alt="" />
+          <img className="entry-transition-building" src={`/assets/figma/interstitial-building.png?${CACHE_VERSION}`} alt="" />
+          <img className="entry-transition-logo" src={`/assets/figma/interstitial-logo.png?${CACHE_VERSION}`} alt="" />
+          <div className="entry-transition-title">Your Place on the Wall</div>
         </div>
       </div>
     </main>
