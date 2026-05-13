@@ -303,11 +303,13 @@ button {
 
 .entry-transition-building {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
+  left: 50%;
+  bottom: -3%;
+  transform: translateX(-46%);
+  width: auto;
+  height: 94%;
+  max-width: none;
+  object-fit: contain;
   pointer-events: none;
 }
 
