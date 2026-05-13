@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"if (Test-Path .next) { Remove-Item .next -Recurse -Force }; npx next dev\"",
+    "dev": "rm -rf .next && next dev",
     "build": "next build",
     "start": "next start"
   },
