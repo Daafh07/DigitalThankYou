@@ -148,7 +148,7 @@ export default function DigitalThankYouWall() {
       {/* De livewall-stage is de 16:10 bak waar alles in zit.
           De achtergrondafbeelding van de kamer staat hieronder als een gewone <img>. */}
       <div className="livewall-stage" aria-label="LiveWall Your Place on the Wall">
-        <img className="livewall-room" src={`/assets/figma/livewall-room.png?${CACHE_VERSION}`} alt="" />
+        <img className="livewall-room" style={{display: buildingEntered?'block':'none'}} src={`/assets/figma/livewall-room.png?${CACHE_VERSION}`} alt=""  />
         <div className="livewall-title">Your Place on the Wall</div>
 
         {/* Donkere vignette die de aandacht naar het midden trekt.
