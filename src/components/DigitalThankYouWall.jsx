@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import EntryBuildingModel, { preloadEntryBuildingModel } from './EntryBuildingModel';
 import HeroScene from './HeroScene';
 import LoadingAnimation from './LoadingAnimation';
 
@@ -13,6 +14,8 @@ const FALLBACK_PARTNERS = [
 
 const CACHE_VERSION = 'v3';
 const LOADING_BACKGROUND = `/assets/figma/achtergrondloading.svg?${CACHE_VERSION}`;
+const ENTRY_BUILDING_MODEL = '/assets/models/buildings/Livewall-gebouw.glb';
+const ENTRY_TRANSITION_DURATION = 4200;
 
 export default function DigitalThankYouWall() {
   const [partners, setPartners] = useState(FALLBACK_PARTNERS);
@@ -21,12 +24,15 @@ export default function DigitalThankYouWall() {
   const [minimumTimePassed, setMinimumTimePassed] = useState(false);
   const [entryTransitionVisible, setEntryTransitionVisible] = useState(false);
   const [entryTransitionDone, setEntryTransitionDone] = useState(false);
+  const [entryBuildingReady, setEntryBuildingReady] = useState(false);
   const [buildingEntered, setBuildingEntered] = useState(false);
   const [wallAnimationStarted, setWallAnimationStarted] = useState(false);
   const [focusOverlayVisible, setFocusOverlayVisible] = useState(true);
   const [revealLightVisible, setRevealLightVisible] = useState(false);
 
   useEffect(() => {
+    preloadEntryBuildingModel();
+
     fetch('/assets/data/partners.json')
       .then((response) => (response.ok ? response.json() : FALLBACK_PARTNERS))
       .then((data) => setPartners(Array.isArray(data) && data.length ? data : FALLBACK_PARTNERS))
@@ -46,6 +52,7 @@ export default function DigitalThankYouWall() {
       image.src = src;
       if (image.decode) image.decode().then(resolve).catch(resolve);
     });
+    const loadModel = (src) => fetch(src, { cache: 'force-cache' }).then((response) => response.blob()).catch(() => null);
 
     Promise.all([
       loadImage(`/assets/figma/livewall-room.png?${CACHE_VERSION}`),
@@ -53,6 +60,7 @@ export default function DigitalThankYouWall() {
       loadImage(`/assets/figma/interstitial-building.png?${CACHE_VERSION}`),
    
       loadImage(LOADING_BACKGROUND),
+      loadModel(ENTRY_BUILDING_MODEL),
     ]).then(() => {
       if (!cancelled) setAssetsReady(true);
     });
@@ -70,13 +78,23 @@ export default function DigitalThankYouWall() {
   const handleLoadingComplete = useCallback(() => {
   setMinimumTimePassed(true);
 }, []);
+  const handleEntryBuildingReady = useCallback(() => {
+    setEntryBuildingReady(true);
+  }, []);
   const loadingComplete = assetsReady && sceneReady && minimumTimePassed;
   
 
   useEffect(() => {
     if (!loadingComplete || entryTransitionDone) return undefined;
 
+    setEntryBuildingReady(false);
     setEntryTransitionVisible(true);
+    return undefined;
+  }, [entryTransitionDone, loadingComplete]);
+
+  useEffect(() => {
+    if (!entryTransitionVisible || !entryBuildingReady || entryTransitionDone) return undefined;
+
     const transitionTimer = window.setTimeout(() => {
       setEntryTransitionDone(true);
       setEntryTransitionVisible(false);
@@ -84,11 +102,11 @@ export default function DigitalThankYouWall() {
       // hide the overlays when the entry animation finishes so the room with the wall is visible
       setFocusOverlayVisible(false);
       setRevealLightVisible(false);
-    }, 3800);
+    }, ENTRY_TRANSITION_DURATION);
     return () => {
       window.clearTimeout(transitionTimer);
     };
-  }, [entryTransitionDone, loadingComplete]);
+  }, [entryBuildingReady, entryTransitionDone, entryTransitionVisible]);
 
   return (
     <main className="experience-shell">
@@ -122,8 +140,10 @@ export default function DigitalThankYouWall() {
       </div>
       <div className={`entry-transition${entryTransitionVisible ? ' entry-transition-visible' : ''}`} aria-hidden={!entryTransitionVisible || entryTransitionDone}>
         <div className="entry-transition-frame">
-          <img className="entry-transition-viewport-bg" src={`/assets/figma/interstitial-bg.png?${CACHE_VERSION}`} alt="" />
-          <img className="entry-transition-building" src={`/assets/figma/interstitial-building.png?${CACHE_VERSION}`} alt="" />
+          <img className="entry-transition-viewport-bg" src={LOADING_BACKGROUND} alt="" />
+          {entryTransitionVisible && !entryTransitionDone ? (
+            <EntryBuildingModel onReady={handleEntryBuildingReady} />
+          ) : null}
           <img className="entry-transition-logo" src={`/assets/figma/interstitial-logo.png?${CACHE_VERSION}`} alt="" />
           <div className="entry-transition-title">Your Place on the Wall</div>
         </div>
