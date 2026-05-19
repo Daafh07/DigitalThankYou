@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 
-const DigitalThankYouWall = dynamic(() => import('@/components/DigitalThankYouWall'), {
+const DigitalThankYouWall = dynamic(() => import('@/components/digital-thank-you-wall'), {
   ssr: false,
 });
 
