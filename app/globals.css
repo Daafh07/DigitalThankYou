@@ -41,7 +41,6 @@ button {
   overflow: hidden;
   display: grid;
   place-items: center;
-  background: #f7fbff;
 }
 
 .experience-shell::after {
@@ -60,7 +59,6 @@ button {
   width: max(100vw, 160vh);
   aspect-ratio: 16 / 10;
   overflow: hidden;
-  background: #eef6ff;
 }
 
 .livewall-room {
@@ -340,7 +338,7 @@ button {
   display: grid;
   place-items: center;
   color: rgba(23, 89, 187, 0.72);
-  background: transparent;
+  background: white;
   font-size: 13px;
 }
 
