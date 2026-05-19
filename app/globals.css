@@ -1,3 +1,5 @@
+/* ─── Reset & base ─────────────────────────────────────────────────────────── */
+
 :root {
   color: #1759bb;
   background: #f7fbff;
@@ -30,6 +32,8 @@ button {
   font: inherit;
 }
 
+/* ─── Experience shell ─────────────────────────────────────────────────────── */
+
 .experience-shell {
   position: relative;
   width: 100vw;
@@ -43,6 +47,13 @@ button {
 .experience-shell::after {
   content: none;
 }
+
+.experience-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/* ─── Livewall stage ───────────────────────────────────────────────────────── */
 
 .livewall-stage {
   position: relative;
@@ -61,10 +72,36 @@ button {
   pointer-events: none;
 }
 
-.experience-canvas {
+.livewall-title {
   position: absolute;
-  inset: 0;
+  left: 50%;
+  top: 12.61%;
+  z-index: 4;
+  transform: translate(-50%, -50%);
+  color: rgba(23, 89, 187, 0.72);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(9px, 1.18vw, 17px);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
 }
+
+.livewall-logo {
+  position: absolute;
+  left: 42.01%;
+  top: 69.56%;
+  z-index: 4;
+  width: 16.18%;
+  height: 7.56%;
+  object-fit: contain;
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+/* ─── Tile wall ────────────────────────────────────────────────────────────── */
 
 .livewall-wall {
   position: absolute;
@@ -84,6 +121,61 @@ button {
   opacity: 1;
   visibility: visible;
 }
+
+.figma-tile-wall {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  grid-template-rows: repeat(6, 1fr);
+  gap: 0;
+  width: 100%;
+  height: 96.4%;
+  pointer-events: none;
+}
+
+.figma-tile {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  user-select: none;
+}
+
+.figma-tile-current {
+  position: relative;
+  z-index: 1;
+}
+
+.webgl-tile-wall {
+  position: absolute;
+  left: -39.4%;
+  top: -26.96%;
+  width: 178.44%;
+  height: 186.71%;
+  pointer-events: auto;
+}
+
+.webgl-tile-wall--flying {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.webgl-tile-wall canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ─── Focus & reveal overlays ──────────────────────────────────────────────── */
 
 .focus-overlay {
   position: absolute;
@@ -151,87 +243,7 @@ button {
   }
 }
 
-.figma-tile-wall {
-  position: absolute;
-  left: 0;
-  top: 0;
-  display: grid;
-  grid-template-columns: repeat(10, 1fr);
-  grid-template-rows: repeat(6, 1fr);
-  gap: 0;
-  width: 100%;
-  height: 96.4%;
-  pointer-events: none;
-}
-
-.figma-tile {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: fill;
-  user-select: none;
-}
-
-.figma-tile-current {
-  position: relative;
-  z-index: 1;
-}
-
-.webgl-tile-wall {
-  position: absolute;
-  left: -39.4%;
-  top: -26.96%;
-  width: 178.44%;
-  height: 186.71%;
-  pointer-events: auto;
-}
-
-.webgl-tile-wall--flying {
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 10;
-  pointer-events: none;
-}
-
-.webgl-tile-wall canvas {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100% !important;
-  height: 100% !important;
-}
-
-.livewall-title {
-  position: absolute;
-  left: 50%;
-  top: 12.61%;
-  z-index: 4;
-  transform: translate(-50%, -50%);
-  color: rgba(23, 89, 187, 0.72);
-  font-family: "Playfair Display", Georgia, serif;
-  font-size: clamp(9px, 1.18vw, 17px);
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1;
-  text-align: center;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
-.livewall-logo {
-  position: absolute;
-  left: 42.01%;
-  top: 69.56%;
-  z-index: 4;
-  width: 16.18%;
-  height: 7.56%;
-  object-fit: contain;
-  opacity: 0.75;
-  pointer-events: none;
-}
+/* ─── Loading screen ───────────────────────────────────────────────────────── */
 
 .livewall-loader {
   position: absolute;
@@ -245,6 +257,12 @@ button {
     opacity 720ms ease,
     visibility 720ms ease;
   visibility: visible;
+}
+
+.livewall-loader canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .livewall-loader-bg {
@@ -261,6 +279,72 @@ button {
   visibility: hidden;
   pointer-events: none;
 }
+
+.livewall-loader-logo {
+  position: relative;
+  z-index: 1;
+  width: clamp(150px, 18vw, 260px);
+  height: auto;
+  opacity: 0.82;
+  animation: loaderLogoFloat 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.livewall-loader-line {
+  position: absolute;
+  z-index: 1;
+  top: calc(50% + clamp(58px, 5.4vw, 78px));
+  width: clamp(110px, 12vw, 180px);
+  height: 1px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(23, 89, 187, 0.18);
+}
+
+.livewall-loader-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 42%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, rgba(23, 89, 187, 0.78), transparent);
+  animation: loaderLine 1.35s ease-in-out infinite;
+}
+
+@keyframes loaderLogoFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+    filter: drop-shadow(0 16px 22px rgba(23, 89, 187, 0.12));
+  }
+
+  50% {
+    transform: translateY(-5px);
+    filter: drop-shadow(0 22px 28px rgba(23, 89, 187, 0.16));
+  }
+}
+
+@keyframes loaderLine {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(260%);
+  }
+}
+
+.loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(23, 89, 187, 0.72);
+  background: transparent;
+  font-size: 13px;
+}
+
+/* ─── Entry transition ─────────────────────────────────────────────────────── */
 
 .entry-transition {
   position: fixed;
@@ -351,74 +435,4 @@ button {
   .entry-transition-frame {
     width: max(100vw, 150vh);
   }
-}
-
-.livewall-loader-logo {
-  position: relative;
-  z-index: 1;
-  width: clamp(150px, 18vw, 260px);
-  height: auto;
-  opacity: 0.82;
-  animation: loaderLogoFloat 1.8s ease-in-out infinite;
-  pointer-events: none;
-}
-
-.livewall-loader-line {
-  position: absolute;
-  z-index: 1;
-  top: calc(50% + clamp(58px, 5.4vw, 78px));
-  width: clamp(110px, 12vw, 180px);
-  height: 1px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(23, 89, 187, 0.18);
-}
-
-.livewall-loader-line::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  width: 42%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, transparent, rgba(23, 89, 187, 0.78), transparent);
-  animation: loaderLine 1.35s ease-in-out infinite;
-}
-
-@keyframes loaderLogoFloat {
-  0%,
-  100% {
-    transform: translateY(0);
-    filter: drop-shadow(0 16px 22px rgba(23, 89, 187, 0.12));
-  }
-
-  50% {
-    transform: translateY(-5px);
-    filter: drop-shadow(0 22px 28px rgba(23, 89, 187, 0.16));
-  }
-}
-
-@keyframes loaderLine {
-  0% {
-    transform: translateX(-120%);
-  }
-
-  100% {
-    transform: translateX(260%);
-  }
-}
-
-.loading {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: rgba(23, 89, 187, 0.72);
-  background: transparent;
-  font-size: 13px;
-}
-
-.livewall-loader canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
 }
