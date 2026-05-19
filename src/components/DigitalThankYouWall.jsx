@@ -56,9 +56,9 @@ export default function DigitalThankYouWall() {
 
     Promise.all([
       loadImage(`/assets/figma/livewall-room.png?${CACHE_VERSION}`),
-      loadImage(`/assets/figma/livewall-logo-text-only.png?${CACHE_VERSION}`),
-      loadImage(`/assets/figma/interstitial-bg.png?${CACHE_VERSION}`),
-      loadImage(`/assets/figma/interstitial-logo.png?${CACHE_VERSION}`),
+      loadImage(`/assets/figma/newLogo.svg?${CACHE_VERSION}`),
+      loadImage(`/assets/figma/interstitial-building.png?${CACHE_VERSION}`),
+   
       loadImage(LOADING_BACKGROUND),
       loadModel(ENTRY_BUILDING_MODEL),
     ]).then(() => {
@@ -130,7 +130,7 @@ export default function DigitalThankYouWall() {
             />
           </Suspense>
         </div>
-        <img className="livewall-logo" src={`/assets/figma/livewall-logo-text-only.png?${CACHE_VERSION}`} alt="LiveWall" />
+        <img className="livewall-logo" src={`/assets/figma/newLogo.svg?${CACHE_VERSION}`} alt="LiveWall" />
         <div className={`livewall-loader${loadingComplete ? ' livewall-loader-hidden' : ''}`} aria-hidden={loadingComplete}>
           {/* <img className="livewall-loader-bg" src={LOADING_BACKGROUND} alt="" />
           <img className="livewall-loader-logo" src={`/assets/figma/livewall-logo.png?${CACHE_VERSION}`} alt="" />
