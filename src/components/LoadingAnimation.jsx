@@ -2,50 +2,11 @@
 
 import { useEffect, useRef } from 'react';
 
-const W = 900;
-const H = 506;
-const DELAY    = 1500; 
-const DURATION = 1800;
-const EDGE     = 0.06; 
-const BIAS     = 0.72;
-
-function makeNoise() {
-  const n = new Float32Array(W * H);
-
-  for (const [scale, amp] of [[W/2.5, .5],[W/6, .28],[W/14, .14],[W/30, .08]]) {
-    const cols = Math.ceil(W/scale) + 2;
-    const g = Float32Array.from({ length: cols * (Math.ceil(H/scale)+2) }, Math.random);
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const x0 = Math.floor(x/scale), y0 = Math.floor(y/scale);
-      const fx = x/scale - x0,        fy = y/scale - y0;
-      const sx = fx*fx*(3-2*fx),       sy = fy*fy*(3-2*fy);
-      n[y*W+x] += (g[y0*cols+x0]*(1-sx)*(1-sy) + g[y0*cols+x0+1]*sx*(1-sy)
-                 + g[(y0+1)*cols+x0]*(1-sx)*sy  + g[(y0+1)*cols+x0+1]*sx*sy) * amp;
-    }
-  }
-
-
-  for (let i = 0; i < n.length; i++)
-    n[i] = n[i] * (1-BIAS) + (1 - (i%W) / (W-1)) * BIAS;
-
-
-  let mn = Infinity, mx = -Infinity;
-  for (const v of n) { if (v < mn) mn = v; if (v > mx) mx = v; }
-  return n.map(v => (v-mn) / (mx-mn));
-}
-
-function loadBitmap(src) {
-  const img = Object.assign(new Image(), { src });
-  return img.decode().then(() => createImageBitmap(img));
-}
-
-function getPixels(bitmap) {
-  const off = new OffscreenCanvas(W, H);
-  const c = off.getContext('2d');
-  c.drawImage(bitmap, 0, 0, W, H);
-  return c.getImageData(0, 0, W, H).data;
-}
-
+const delay       = 2000;
+const duration    = 1200;
+const pause       = 1000;
+const heightWaves = 40;
+const amountWaves = 4;
 
 export default function loadingAnimation({ onComplete }) {
   const canvasRef = useRef(null);
@@ -54,63 +15,79 @@ export default function loadingAnimation({ onComplete }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
-    canvas.width  = W;
-    canvas.height = H;
+    const brush = canvas.getContext('2d');
+    const pixelRatio = window.devicePixelRatio || 1;
 
-    let rafId;
+    let canvasWidth = canvas.offsetWidth;
+    if (canvasWidth === 0) canvasWidth = 900;
+    let canvasHeight = canvas.offsetHeight;
+    if (canvasHeight === 0) canvasHeight = 506;
+
+    canvas.width  = canvasWidth * pixelRatio;
+    canvas.height = canvasHeight * pixelRatio;
+    brush.scale(pixelRatio, pixelRatio);
+
+    let animation;
 
     async function run() {
-      const [green, blue] = await Promise.all([
+      const [logo1, logo2] = await Promise.all([
         loadBitmap('/assets/figma/loadingAnimationLogo1.png'),
         loadBitmap('/assets/figma/loadingAnimationLogo2.png'),
       ]);
 
-
-      ctx.drawImage(green, 0, 0, W, H);
+      brush.drawImage(logo1, 0, 0, canvasWidth, canvasHeight);
 
       setTimeout(() => {
-        const from  = getPixels(green);
-        const to    = getPixels(blue);
-        const noise = makeNoise();
-        const ease  = t => t < .5 ? 2*t*t : 1 - (-2*t+2)**2/2;
+        const ease  = animationProgress => animationProgress < .5 ? 2*animationProgress*animationProgress : 1 - (-2*animationProgress+2)**2/2;
         const start = performance.now();
 
-        (function frame(now) {
-          const p = ease(Math.min((now-start)/DURATION, 1));
-          const out = ctx.createImageData(W, H);
+        (function frame(currentTime) {
+          const progress = ease(Math.min((currentTime - start) / duration, 1));
 
-          for (let i = 0; i < W*H; i++) {
-            const r   = Math.max(0, Math.min(1, (p - noise[i] + EDGE) / (2*EDGE)));
-            const ink = r > 0 && r < 1 ? (1 - Math.abs(r-.5)*2) * .55 : 0;
-            const px  = i*4;
-            out.data[px]   = (from[px]  *(1-r) + to[px]  *r) * (1-ink);
-            out.data[px+1] = (from[px+1]*(1-r) + to[px+1]*r) * (1-ink);
-            out.data[px+2] = (from[px+2]*(1-r) + to[px+2]*r) * (1-ink) + ink*8;
-            out.data[px+3] = 255;
+          brush.drawImage(logo2, 0, 0, canvasWidth, canvasHeight);
+          brush.save();
+          brush.beginPath();
+
+          const waveX = canvasWidth - progress * (canvasWidth + heightWaves);
+
+          brush.moveTo(0, 0);
+          brush.lineTo(waveX, 0);
+
+          for (let currentAmountWaves = 0; currentAmountWaves <= amountWaves; currentAmountWaves++) {
+            const waveY        = (currentAmountWaves / amountWaves) * canvasHeight;
+            const waveMidPoint = waveY - (canvasHeight / amountWaves) / 2;
+            const waveDirection = currentAmountWaves % 2 === 0 ? heightWaves : -heightWaves;
+            brush.quadraticCurveTo(waveX + waveDirection, waveMidPoint, waveX, waveY);
           }
 
-          ctx.putImageData(out, 0, 0);
+          brush.lineTo(0, canvasHeight);
+          brush.closePath();
+          brush.clip();
+          brush.drawImage(logo1, 0, 0, canvasWidth, canvasHeight);
+          brush.restore();
 
-          if (p < 1) {
-            rafId = requestAnimationFrame(frame);
-         } else {
-  ctx.drawImage(blue, 0, 0, W, H);
-  setTimeout(() => onComplete?.(), 1000);
-}
+          if (progress < 1) {
+            animation = requestAnimationFrame(frame);
+          } else {
+            setTimeout(() => onComplete?.(), pause);
+          }
         })(performance.now());
-      }, DELAY);
+      }, delay);
     }
 
     run();
-
-    return () => cancelAnimationFrame(rafId);
+    return () => cancelAnimationFrame(animation);
   }, [onComplete]);
 
- return (
-  <canvas
-    ref={canvasRef}
-    style={{ width: '100%', height: '100%', display: 'block', background: '#f4f9ff' }}
-  />
-);
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ width: '100%', height: '100%', display: 'block', background: '#f4f9ff' }}
+    />
+  );
+}
+
+function loadBitmap(src) {
+  const img = Object.assign(new Image(), { src });
+  return img.decode().then(() => createImageBitmap(img));
 }
