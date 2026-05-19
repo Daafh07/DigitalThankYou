@@ -132,9 +132,6 @@ export default function DigitalThankYouWall() {
         </div>
         <img className="livewall-logo" src={`/assets/figma/newLogo.svg?${CACHE_VERSION}`} alt="LiveWall" />
         <div className={`livewall-loader${loadingComplete ? ' livewall-loader-hidden' : ''}`} aria-hidden={loadingComplete}>
-          {/* <img className="livewall-loader-bg" src={LOADING_BACKGROUND} alt="" />
-          <img className="livewall-loader-logo" src={`/assets/figma/livewall-logo.png?${CACHE_VERSION}`} alt="" />
-          <div className="livewall-loader-line" /> */}
          <LoadingAnimation onComplete={handleLoadingComplete} />
         </div>
       </div>
@@ -144,7 +141,7 @@ export default function DigitalThankYouWall() {
           {entryTransitionVisible && !entryTransitionDone ? (
             <EntryBuildingModel onReady={handleEntryBuildingReady} />
           ) : null}
-          <img className="entry-transition-logo" src={`/assets/figma/interstitial-logo.png?${CACHE_VERSION}`} alt="" />
+          <img className="entry-transition-logo" src={`/assets/figma/newLogo.svg?${CACHE_VERSION}`} alt="" />
           <div className="entry-transition-title">Your Place on the Wall</div>
         </div>
       </div>
