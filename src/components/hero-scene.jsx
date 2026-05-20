@@ -289,6 +289,7 @@ export default function HeroScene({
   onStartIntroRequest,
 } = {}) {
   const hostRef = useRef(null);
+  const cameraRef = useRef(null);
   const floatingTileRef = useRef(null);
   const [showTileDownload, setShowTileDownload] = useState(false);
   const [showUnlockOverlay, setShowUnlockOverlay] = useState(false);
@@ -339,6 +340,7 @@ export default function HeroScene({
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 20);
     camera.position.set(0, 0, 10);
     camera.lookAt(0, 0, 0);
+    cameraRef.current = camera;
 
     // ── Ready gate ───────────────────────────────────────────────────────────
 
@@ -1311,6 +1313,8 @@ export default function HeroScene({
     };
 
     const handleClick = (e) => {
+      if (e.target.closest("[data-tile-download]")) return;
+
       const world = clientToWorld(e);
 
       if (introActive) {
@@ -1348,6 +1352,7 @@ export default function HeroScene({
         targetRotation.y = 0;
         dragState.rotationX = 0;
         dragState.rotationY = 0;
+        setShowTileDownload(false);
         window.setTimeout(() => {
           onFocusOverlayChange?.(true);
           setShowUnlockOverlay(true);
@@ -1367,6 +1372,7 @@ export default function HeroScene({
       insertionStarted = true;
       insertionFlightReleased = false;
       progress = 0;
+      setShowTileDownload(false);
       setShowUnlockOverlay(false);
       onFocusOverlayChange?.(false);
       ensureDropSound();
@@ -1707,6 +1713,7 @@ export default function HeroScene({
             dragState.rotationY =
               0;
           droppedTileSounds.clear();
+          setShowTileDownload(true);
         }
       }
 
@@ -1807,6 +1814,7 @@ export default function HeroScene({
       if (insertionStarted && !extracting && !inserted && progress >= 1) {
         inserted = true;
         impactTime = elapsed;
+        setShowTileDownload(false);
         currentBrandWallTile.material.opacity = 1; // muurversie van de tegel verschijnt
       }
 
@@ -2108,19 +2116,23 @@ export default function HeroScene({
       if (host.contains(renderer.domElement))
         host.removeChild(renderer.domElement);
       floatingTileRef.current = null;
+      cameraRef.current = null;
     };
   }, []);
 
   return (
     <div className="hero-scene-root">
-      <div
-        ref={hostRef}
-        className="webgl-tile-wall"
-        aria-label="LiveWall WebGL tiles"
-      >
+      <div className="webgl-tile-wall">
+        <div
+          ref={hostRef}
+          className="absolute inset-0"
+          aria-label="LiveWall WebGL tiles"
+        />
         <TileDownloadButton
           visible={showTileDownload}
           tileRef={floatingTileRef}
+          hostRef={hostRef}
+          cameraRef={cameraRef}
         />
       </div>
     </div>
