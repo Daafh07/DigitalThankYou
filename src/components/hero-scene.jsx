@@ -47,6 +47,9 @@ const TILE_ART_ASPECT = 79 / 82;
 // Beginopaciteit van de donkere vignet-overlay die de aandacht naar het midden trekt.
 const FOCUS_OVERLAY_OPACITY = 0.22;
 
+// Overlay na het ontgrendelen van het tegeltje (#002045, 50%).
+const UNLOCK_OVERLAY_OPACITY = 0.5;
+
 // Genormaliseerde positie en afmetingen van het tegelraster binnen de achtergrondafbeelding.
 // Waarden zijn fracties van de canvasbreedte/-hoogte (0 = links/boven, 1 = rechts/onder).
 const WALL_VIEWPORT = {
@@ -288,16 +291,21 @@ export default function HeroScene({
   const hostRef = useRef(null);
   const floatingTileRef = useRef(null);
   const [showTileDownload, setShowTileDownload] = useState(false);
+  const [showUnlockOverlay, setShowUnlockOverlay] = useState(false);
 
   // Refs slaan de actuele prop-waarden op zodat de imperatieve animatielus
   // altijd de meest recente waarden ziet zonder dat het effect opnieuw hoeft te draaien.
   const startIntroRef = useRef(startIntro);
   const startWallEntranceRef = useRef(startWallEntrance);
   const externalOverlayRef = useRef(externalFocusOverlayVisible ?? true);
+  const showUnlockOverlayRef = useRef(false);
 
   useEffect(() => {
     externalOverlayRef.current = externalFocusOverlayVisible ?? true;
   }, [externalFocusOverlayVisible]);
+  useEffect(() => {
+    showUnlockOverlayRef.current = showUnlockOverlay;
+  }, [showUnlockOverlay]);
   useEffect(() => {
     startIntroRef.current = startIntro;
   }, [startIntro]);
@@ -322,6 +330,9 @@ export default function HeroScene({
     renderer.setClearColor("#000000", 0);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     host.appendChild(renderer.domElement);
+    renderer.domElement.style.position = "absolute";
+    renderer.domElement.style.inset = "0";
+    renderer.domElement.style.zIndex = "1";
 
     // Orthografische camera: world-units komen direct overeen met de genormaliseerde viewport-rect.
     // Hierdoor is het positioneren van tegels een kwestie van simpele vermenigvuldiging.
@@ -498,6 +509,23 @@ export default function HeroScene({
     focusOverlay.position.z = 0.82;
     focusOverlay.renderOrder = 2;
     scene.add(focusOverlay);
+
+    // Overlay na unlock: zelfde plane, maar #002045; renderOrder onder het zwevende tegeltje (3).
+    const unlockOverlayMaterial = new THREE.MeshBasicMaterial({
+      color: "#002045",
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const unlockOverlay = new THREE.Mesh(
+      overlayGeometry,
+      unlockOverlayMaterial,
+    );
+    unlockOverlay.position.z = 0.83;
+    unlockOverlay.renderOrder = 2;
+    unlockOverlay.visible = false;
+    scene.add(unlockOverlay);
 
     // ── Dust particles ────────────────────────────────────────────────────────
 
@@ -930,6 +958,7 @@ export default function HeroScene({
     let wallEntranceStartedAt = 0;
     let glowStartTime = -1;
     let overlayOpacity = FOCUS_OVERLAY_OPACITY;
+    let unlockOverlayOpacity = 0;
 
     const flightDuration = 3.15; // seconden voor de invoegvlucht
     const introDelay = 5; // seconden wachten voor de intro-animatie start
@@ -1069,6 +1098,7 @@ export default function HeroScene({
       renderer.domElement.style.width = "100%";
       renderer.domElement.style.height = "100%";
       focusOverlay.scale.set(viewWidth, viewHeight, 1);
+      unlockOverlay.scale.set(viewWidth, viewHeight, 1);
 
       tiles.forEach((mesh, i) => {
         const col = i % TILE_COLS;
@@ -1318,7 +1348,10 @@ export default function HeroScene({
         targetRotation.y = 0;
         dragState.rotationX = 0;
         dragState.rotationY = 0;
-        window.setTimeout(() => onFocusOverlayChange?.(true), 260);
+        window.setTimeout(() => {
+          onFocusOverlayChange?.(true);
+          setShowUnlockOverlay(true);
+        }, 260);
         host.style.cursor = "grab";
         return;
       }
@@ -1334,6 +1367,7 @@ export default function HeroScene({
       insertionStarted = true;
       insertionFlightReleased = false;
       progress = 0;
+      setShowUnlockOverlay(false);
       onFocusOverlayChange?.(false);
       ensureDropSound();
       audioContext?.resume?.();
@@ -1621,6 +1655,7 @@ export default function HeroScene({
           introActive = false;
           introFlightStarted = false;
           setShowTileDownload(true);
+          setShowUnlockOverlay(true);
           setRevealStageLight(false);
           floatingMaterials[4].opacity = floatingMaterials[5].opacity = 1;
           if (lockedPlate) lockedPlate.visible = false;
@@ -1691,10 +1726,25 @@ export default function HeroScene({
         overlayOpacity = THREE.MathUtils.damp(overlayOpacity, 0, 5, delta);
 
       overlayMaterial.opacity = overlayOpacity;
+
+      const unlockTarget = showUnlockOverlayRef.current
+        ? UNLOCK_OVERLAY_OPACITY
+        : 0;
+      unlockOverlayOpacity = THREE.MathUtils.damp(
+        unlockOverlayOpacity,
+        unlockTarget,
+        5,
+        delta,
+      );
+      unlockOverlayMaterial.opacity = unlockOverlayOpacity;
+      unlockOverlay.visible =
+        unlockOverlayOpacity > 0.003 && wallEntranceComplete;
+
       focusOverlay.visible =
         overlayOpacity > 0.003 &&
         externalOverlayRef.current &&
-        wallEntranceComplete;
+        wallEntranceComplete &&
+        unlockOverlayOpacity < 0.01;
 
       // ── Floating tile transform ───────────────────────────────────────────
 
@@ -2015,6 +2065,7 @@ export default function HeroScene({
         shockwaveMaterial,
         idleGlowMaterial,
         overlayMaterial,
+        unlockOverlayMaterial,
       ].forEach((m) => m.dispose());
       if (lockedPlate) lockedPlate.material.dispose();
       if (crackOverlay) crackOverlay.material.dispose();
@@ -2066,11 +2117,12 @@ export default function HeroScene({
         ref={hostRef}
         className="webgl-tile-wall"
         aria-label="LiveWall WebGL tiles"
-      />
-      <TileDownloadButton
-        visible={showTileDownload}
-        tileRef={floatingTileRef}
-      />
+      >
+        <TileDownloadButton
+          visible={showTileDownload}
+          tileRef={floatingTileRef}
+        />
+      </div>
     </div>
   );
 }
