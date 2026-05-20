@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { downloadTileAsGlb } from "../lib/download-tile";
+import TileDownloadButton from "./ui/tile-download-button";
 
 // ─── Muurgrid ────────────────────────────────────────────────────────────────
 
@@ -288,18 +288,6 @@ export default function HeroScene({
   const hostRef = useRef(null);
   const floatingTileRef = useRef(null);
   const [showTileDownload, setShowTileDownload] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-
-  const handleDownloadTile = useCallback(async () => {
-    const tile = floatingTileRef.current;
-    if (!tile || isDownloading) return;
-    setIsDownloading(true);
-    try {
-      await downloadTileAsGlb(tile);
-    } finally {
-      setIsDownloading(false);
-    }
-  }, [isDownloading]);
 
   // Refs slaan de actuele prop-waarden op zodat de imperatieve animatielus
   // altijd de meest recente waarden ziet zonder dat het effect opnieuw hoeft te draaien.
@@ -2079,17 +2067,10 @@ export default function HeroScene({
         className="webgl-tile-wall"
         aria-label="LiveWall WebGL tiles"
       />
-      {showTileDownload ? (
-        <button
-          type="button"
-          className="tile-download-btn"
-          onClick={handleDownloadTile}
-          disabled={isDownloading}
-          aria-label="Download jouw tegeltje als 3D-model (GLB)"
-        >
-          {isDownloading ? "Bezig met downloaden…" : "Download tegeltje"}
-        </button>
-      ) : null}
+      <TileDownloadButton
+        visible={showTileDownload}
+        tileRef={floatingTileRef}
+      />
     </div>
   );
 }

@@ -4,7 +4,10 @@ import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
  * Exporteert de keramische tegel-mesh als GLB (WebGL/3D) en start een browserdownload.
  * Decoratieve kinderen (gloed, barst, scherven) worden weggelaten.
  */
-export async function downloadTileAsGlb(tileMesh, filename = "mijn-tegeltje.glb") {
+export async function downloadTileAsGlb(
+  tileMesh,
+  filename = "mijn-tegeltje.glb",
+) {
   if (!tileMesh?.isMesh) return false;
 
   const exportMesh = tileMesh.clone(true);
@@ -29,12 +32,7 @@ export async function downloadTileAsGlb(tileMesh, filename = "mijn-tegeltje.glb"
 
   const exporter = new GLTFExporter();
   const glb = await new Promise((resolve, reject) => {
-    exporter.parse(
-      exportMesh,
-      resolve,
-      reject,
-      { binary: true },
-    );
+    exporter.parse(exportMesh, resolve, reject, { binary: true });
   });
 
   const blob = new Blob([glb], { type: "model/gltf-binary" });
