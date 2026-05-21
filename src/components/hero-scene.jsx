@@ -1,13 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useRef } from 'react';
-import * as THREE from 'three';
+import { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
+import TileDownloadButton from "./ui/tile-download-button";
 
 // ─── Muurgrid ────────────────────────────────────────────────────────────────
 
 // Afmetingen van het tegelraster op de muur.
-const TILE_COLS  = 10;
-const TILE_ROWS  = 6;
+const TILE_COLS = 10;
+const TILE_ROWS = 6;
 const TILE_COUNT = TILE_COLS * TILE_ROWS; // totaal 60 tegels
 
 // Welk rasterindices de centrale tegel van het huidige merk is.
@@ -16,42 +17,45 @@ const CURRENT_BRAND_INDEX = 24;
 // ─── Textuurpaden ─────────────────────────────────────────────────────────────
 
 // SVG-bestanden die als kanaaltexturen worden ingeladen.
-const EMPTY_TILE_TEXTURE    = '/assets/textures/emptytile.svg';
-const CURRENT_BRAND_TEXTURE = '/assets/textures/currentbrand.svg';
-const RITUALS_TEXTURE       = '/assets/textures/rituals.svg';
-const BURGERKING_TEXTURE    = '/assets/textures/burgerking.svg';
-const LOCKED_TILE_TEXTURE   = '/assets/textures/lockedtile.svg';
-const TILE_BACK_TEXTURE     = '/assets/textures/achterkantefteling.svg';
-const CERAMIC_EDGE_TEXTURE  = '/assets/textures/keramiek.jpg'; // JPG voor de keramische rand
+const EMPTY_TILE_TEXTURE = "/assets/textures/emptytile.svg";
+const CURRENT_BRAND_TEXTURE = "/assets/textures/currentbrand.svg";
+const RITUALS_TEXTURE = "/assets/textures/rituals.svg";
+const BURGERKING_TEXTURE = "/assets/textures/burgerking.svg";
+const LOCKED_TILE_TEXTURE = "/assets/textures/lockedtile.svg";
+const TILE_BACK_TEXTURE = "/assets/textures/achterkantefteling.svg";
+const CERAMIC_EDGE_TEXTURE = "/assets/textures/keramiek.jpg"; // JPG voor de keramische rand
 
 // ─── Audio ────────────────────────────────────────────────────────────────────
 
 // Geluidsbestand dat afspeelt als een tegel de muur raakt.
-const DROP_SOUND = '/assets/audio/dropsound.mp3';
+const DROP_SOUND = "/assets/audio/dropsound.mp3";
 
 // ─── Scènegeometrie ───────────────────────────────────────────────────────────
 
 // Uniforme schaalfactor van de zwevende tegel wanneer de gebruiker hem vasthoudt.
-const FREE_TILE_SCALE    = 3.75;
+const FREE_TILE_SCALE = 3.75;
 
 // Z-diepte van de zwevende tegel voor de camera (hoe groter, hoe dichterbij).
-const FREE_TILE_Z        = 3.25;
+const FREE_TILE_Z = 3.25;
 
 // Dikte van de keramische doosvorm van de tegel (in world-units).
-const TILE_DEPTH         = 0.10;
+const TILE_DEPTH = 0.1;
 
 // Breedte/hoogte-verhouding van de tegelafbeelding.
-const TILE_ART_ASPECT    = 79 / 82;
+const TILE_ART_ASPECT = 79 / 82;
 
 // Beginopaciteit van de donkere vignet-overlay die de aandacht naar het midden trekt.
 const FOCUS_OVERLAY_OPACITY = 0.22;
 
+// Overlay na het ontgrendelen van het tegeltje (#002045, 50%).
+const UNLOCK_OVERLAY_OPACITY = 0.5;
+
 // Genormaliseerde positie en afmetingen van het tegelraster binnen de achtergrondafbeelding.
 // Waarden zijn fracties van de canvasbreedte/-hoogte (0 = links/boven, 1 = rechts/onder).
 const WALL_VIEWPORT = {
-  left:   0.2208,
-  top:    0.1444,
-  width:  0.5604,
+  left: 0.2208,
+  top: 0.1444,
+  width: 0.5604,
   height: 0.5356 * 0.964,
 };
 
@@ -67,7 +71,7 @@ const WALL_ENTRANCE_COMPLETE_AFTER = 8.5;
  * Gebruikt voor de invoeg- en extraheeranimatie van de tegel.
  */
 function easeInOutCubic(t) {
-  return t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2;
+  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 }
 
 /**
@@ -87,14 +91,14 @@ function smootherStep(t) {
  * Mipmaps zorgen voor antialiasing op afstand.
  */
 function configureTexture(texture, renderer) {
-  texture.colorSpace        = THREE.SRGBColorSpace;
-  texture.anisotropy        = renderer.capabilities.getMaxAnisotropy();
-  texture.minFilter         = THREE.LinearMipmapLinearFilter;
-  texture.magFilter         = THREE.LinearFilter;
-  texture.generateMipmaps   = true;
-  texture.wrapS             = THREE.ClampToEdgeWrapping;
-  texture.wrapT             = THREE.ClampToEdgeWrapping;
-  texture.needsUpdate       = true;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.needsUpdate = true;
   return texture;
 }
 
@@ -105,26 +109,26 @@ function configureTexture(texture, renderer) {
  * Roept `onComplete` aan zodra de afbeelding gedecod eerd is (of meteen bij een fout).
  */
 function loadSvgTexture(url, renderer, version, size = 2048, onComplete) {
-  const canvas = document.createElement('canvas');
-  canvas.width  = size;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
   canvas.height = size;
 
-  const ctx = canvas.getContext('2d');
-  ctx.imageSmoothingEnabled  = true;
-  ctx.imageSmoothingQuality  = 'high';
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
 
   // Lichtbeige achtergrond die overeenkomt met de keramische tegelkleur.
-  ctx.fillStyle = '#fff8ee';
+  ctx.fillStyle = "#fff8ee";
   ctx.fillRect(0, 0, size, size);
 
   const texture = configureTexture(new THREE.CanvasTexture(canvas), renderer);
-  const image   = new Image();
+  const image = new Image();
 
   image.onload = () => {
     // Teken de SVG op het canvas zodra de afbeelding geladen is
     // en markeer de textuur als gewijzigd zodat Three.js hem opnieuw uploadt.
     ctx.clearRect(0, 0, size, size);
-    ctx.fillStyle = '#fff8ee';
+    ctx.fillStyle = "#fff8ee";
     ctx.fillRect(0, 0, size, size);
     ctx.drawImage(image, 0, 0, size, size);
     texture.needsUpdate = true;
@@ -141,10 +145,13 @@ function loadSvgTexture(url, renderer, version, size = 2048, onComplete) {
  * Configureert de textuur zodra die geladen is en roept `onComplete` aan.
  */
 function loadImageTexture(url, renderer, version, onComplete) {
-  const loader  = new THREE.TextureLoader();
+  const loader = new THREE.TextureLoader();
   const texture = loader.load(
     `${url}?v=${version}`,
-    () => { configureTexture(texture, renderer); onComplete?.(); },
+    () => {
+      configureTexture(texture, renderer);
+      onComplete?.();
+    },
     undefined,
     () => onComplete?.(), // bij fout toch doorgaan
   );
@@ -386,7 +393,7 @@ export default function HeroScene({
   onFocusOverlayChange,
   onRevealLightChange,
   externalFocusOverlayVisible,
-  startIntro       = true,
+  startIntro = true,
   startWallEntrance = false,
   lockedGlowEnabled = true,
   unlockDimEnabled  = false,
@@ -397,10 +404,14 @@ export default function HeroScene({
   onTileInserted,
 } = {}) {
   const hostRef = useRef(null);
+  const cameraRef = useRef(null);
+  const floatingTileRef = useRef(null);
+  const [showTileDownload, setShowTileDownload] = useState(false);
+  const [showUnlockOverlay, setShowUnlockOverlay] = useState(false);
 
   // Refs slaan de actuele prop-waarden op zodat de imperatieve animatielus
   // altijd de meest recente waarden ziet zonder dat het effect opnieuw hoeft te draaien.
-  const startIntroRef       = useRef(startIntro);
+  const startIntroRef = useRef(startIntro);
   const startWallEntranceRef = useRef(startWallEntrance);
   const lockedGlowEnabledRef = useRef(lockedGlowEnabled);
   const externalOverlayRef  = useRef(externalFocusOverlayVisible ?? true);
@@ -418,27 +429,35 @@ export default function HeroScene({
 
     // ── Renderer & camera ────────────────────────────────────────────────────
 
-    const scene    = new THREE.Scene();
+    const scene = new THREE.Scene();
 
     // Transparante WebGL-renderer zodat de achtergrondafbeelding van de kamer zichtbaar blijft.
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-    renderer.setClearColor('#000000', 0);
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: "high-performance",
+    });
+    renderer.setClearColor("#000000", 0);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     host.appendChild(renderer.domElement);
+    renderer.domElement.style.position = "absolute";
+    renderer.domElement.style.inset = "0";
+    renderer.domElement.style.zIndex = "1";
 
     // Orthografische camera: world-units komen direct overeen met de genormaliseerde viewport-rect.
     // Hierdoor is het positioneren van tegels een kwestie van simpele vermenigvuldiging.
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 20);
     camera.position.set(0, 0, 10);
     camera.lookAt(0, 0, 0);
+    cameraRef.current = camera;
 
     // ── Ready gate ───────────────────────────────────────────────────────────
 
     // onReady mag pas afgaan als het eerste frame getekend is én minstens 4 texturen
     // volledig geladen zijn. Zo ziet de bovenliggende component nooit een kaal raster.
-    let loadedTextures  = 0;
-    let firstFrameDone  = false;
-    let readyFired      = false;
+    let loadedTextures = 0;
+    let firstFrameDone = false;
+    let readyFired = false;
 
     const notifyReady = () => {
       if (readyFired || loadedTextures < 4 || !firstFrameDone) return;
@@ -447,22 +466,63 @@ export default function HeroScene({
     };
 
     // Elke textuurl aadcallback roept dit aan om de teller bij te houden.
-    const markTextureLoaded = () => { loadedTextures++; notifyReady(); };
+    const markTextureLoaded = () => {
+      loadedTextures++;
+      notifyReady();
+    };
 
     // ── Textures ─────────────────────────────────────────────────────────────
 
     // Voeg een unieke versie-timestamp toe zodat de browser nooit een verouderde
     // versie uit de cache gebruikt na een deploy.
-    const version            = Date.now();
-    const emptyTexture       = loadSvgTexture(EMPTY_TILE_TEXTURE,    renderer, version, 2048, markTextureLoaded);
-    const currentBrandTexture = loadSvgTexture(CURRENT_BRAND_TEXTURE, renderer, version, 2048, markTextureLoaded);
-    const tileBackTexture    = loadSvgTexture(TILE_BACK_TEXTURE,     renderer, version, 2048, markTextureLoaded);
-    const ceramicEdgeTexture = loadImageTexture(CERAMIC_EDGE_TEXTURE, renderer, version, markTextureLoaded);
+    const version = Date.now();
+    const emptyTexture = loadSvgTexture(
+      EMPTY_TILE_TEXTURE,
+      renderer,
+      version,
+      2048,
+      markTextureLoaded,
+    );
+    const currentBrandTexture = loadSvgTexture(
+      CURRENT_BRAND_TEXTURE,
+      renderer,
+      version,
+      2048,
+      markTextureLoaded,
+    );
+    const tileBackTexture = loadSvgTexture(
+      TILE_BACK_TEXTURE,
+      renderer,
+      version,
+      2048,
+      markTextureLoaded,
+    );
+    const ceramicEdgeTexture = loadImageTexture(
+      CERAMIC_EDGE_TEXTURE,
+      renderer,
+      version,
+      markTextureLoaded,
+    );
 
     // Deze texturen tellen niet mee voor de ready-gate (geen markTextureLoaded callback).
-    const ritualsTexture     = loadSvgTexture(RITUALS_TEXTURE,        renderer, version, 2048);
-    const burgerkingTexture  = loadSvgTexture(BURGERKING_TEXTURE,     renderer, version, 2048);
-    const lockedTexture      = loadSvgTexture(LOCKED_TILE_TEXTURE,    renderer, version, 2048);
+    const ritualsTexture = loadSvgTexture(
+      RITUALS_TEXTURE,
+      renderer,
+      version,
+      2048,
+    );
+    const burgerkingTexture = loadSvgTexture(
+      BURGERKING_TEXTURE,
+      renderer,
+      version,
+      2048,
+    );
+    const lockedTexture = loadSvgTexture(
+      LOCKED_TILE_TEXTURE,
+      renderer,
+      version,
+      2048,
+    );
 
     // De barst-textuur wordt procedureel gegenereerd en tijdens de reveal per frame bijgewerkt.
     const crackMask          = createGrowingCrackTexture(renderer);
@@ -471,14 +531,52 @@ export default function HeroScene({
     // ── Materials ─────────────────────────────────────────────────────────────
 
     // Alle materialen zijn MeshBasicMaterial zodat ze geen lichtbronnen nodig hebben.
-    const emptyMaterial       = new THREE.MeshBasicMaterial({ color: '#ffffff', map: emptyTexture,        toneMapped: false });
-    const blankMaterial       = new THREE.MeshBasicMaterial({ color: '#fffdf8',                           toneMapped: false });
-    const ritualsMaterial     = new THREE.MeshBasicMaterial({ color: '#ffffff', map: ritualsTexture,      toneMapped: false });
-    const burgerkingMaterial  = new THREE.MeshBasicMaterial({ color: '#ffffff', map: burgerkingTexture,   toneMapped: false });
-    const currentBrandMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff', map: currentBrandTexture, toneMapped: false, transparent: true, opacity: 1 });
-    const tileBackMaterial    = new THREE.MeshBasicMaterial({ color: '#ffffff', map: tileBackTexture,     toneMapped: false, transparent: true, opacity: 1 });
-    const ceramicSideMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff', map: ceramicEdgeTexture,  toneMapped: false });
-    const lockedMaterial      = new THREE.MeshBasicMaterial({ color: '#ffffff', map: lockedTexture,       toneMapped: false, transparent: true, opacity: 1, depthWrite: false });
+    const emptyMaterial = new THREE.MeshBasicMaterial({
+      color: "#ffffff",
+      map: emptyTexture,
+      toneMapped: false,
+    });
+    const blankMaterial = new THREE.MeshBasicMaterial({
+      color: "#fffdf8",
+      toneMapped: false,
+    });
+    const ritualsMaterial = new THREE.MeshBasicMaterial({
+      color: "#ffffff",
+      map: ritualsTexture,
+      toneMapped: false,
+    });
+    const burgerkingMaterial = new THREE.MeshBasicMaterial({
+      color: "#ffffff",
+      map: burgerkingTexture,
+      toneMapped: false,
+    });
+    const currentBrandMaterial = new THREE.MeshBasicMaterial({
+      color: "#ffffff",
+      map: currentBrandTexture,
+      toneMapped: false,
+      transparent: true,
+      opacity: 1,
+    });
+    const tileBackMaterial = new THREE.MeshBasicMaterial({
+      color: "#ffffff",
+      map: tileBackTexture,
+      toneMapped: false,
+      transparent: true,
+      opacity: 1,
+    });
+    const ceramicSideMaterial = new THREE.MeshBasicMaterial({
+      color: "#ffffff",
+      map: ceramicEdgeTexture,
+      toneMapped: false,
+    });
+    const lockedMaterial = new THREE.MeshBasicMaterial({
+      color: "#ffffff",
+      map: lockedTexture,
+      toneMapped: false,
+      transparent: true,
+      opacity: 1,
+      depthWrite: false,
+    });
 
     // Gouden glans die de onthullingslichtstralen vormt (additief blenden = optellen van kleuren).
     const revealLightMaterial = new THREE.MeshBasicMaterial({ color: '#ffd060', transparent: true, opacity: 0, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, toneMapped: false, side: THREE.DoubleSide });
@@ -492,9 +590,9 @@ export default function HeroScene({
     // ── Shared geometries ─────────────────────────────────────────────────────
 
     // Gedeelde geometrieën worden hergebruikt voor alle tegels om GPU-geheugen te sparen.
-    const tileGeometry         = new THREE.PlaneGeometry(1, 1);       // platte muurtegelplane
+    const tileGeometry = new THREE.PlaneGeometry(1, 1); // platte muurtegelplane
     const floatingTileGeometry = new THREE.BoxGeometry(1, 1, TILE_DEPTH); // 3D-keramische doos
-    const overlayGeometry      = new THREE.PlaneGeometry(1, 1);       // vignet en lichtoverlays
+    const overlayGeometry = new THREE.PlaneGeometry(1, 1); // vignet en lichtoverlays
 
     // Flash-overlay: felle witte flits op het moment van breuk
     const flashOverlay = new THREE.Mesh(overlayGeometry, flashOverlayMaterial);
@@ -505,55 +603,97 @@ export default function HeroScene({
 
     // Een donkere halftransparante plane over het hele canvas die de aandacht
     // naar de centrale tegel trekt. Verdwijnt wanneer de tegel ingevoegd is.
-    const overlayMaterial = new THREE.MeshBasicMaterial({ color: '#071326', transparent: true, opacity: FOCUS_OVERLAY_OPACITY, depthWrite: false, toneMapped: false });
-    const focusOverlay    = new THREE.Mesh(overlayGeometry, overlayMaterial);
-    focusOverlay.position.z  = 0.82;
+    const overlayMaterial = new THREE.MeshBasicMaterial({
+      color: "#071326",
+      transparent: true,
+      opacity: FOCUS_OVERLAY_OPACITY,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const focusOverlay = new THREE.Mesh(overlayGeometry, overlayMaterial);
+    focusOverlay.position.z = 0.82;
     focusOverlay.renderOrder = 2;
     scene.add(focusOverlay);
+
+    // Overlay na unlock: zelfde plane, maar #002045; renderOrder onder het zwevende tegeltje (3).
+    const unlockOverlayMaterial = new THREE.MeshBasicMaterial({
+      color: "#002045",
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const unlockOverlay = new THREE.Mesh(
+      overlayGeometry,
+      unlockOverlayMaterial,
+    );
+    unlockOverlay.position.z = 0.83;
+    unlockOverlay.renderOrder = 2;
+    unlockOverlay.visible = false;
+    scene.add(unlockOverlay);
 
     // ── Dust particles ────────────────────────────────────────────────────────
 
     // Gouden stofdeeltjes die bij impact van de tegel uitzwermen.
     // Ze staan in een ellipsvorm gerangschikt rond het middelpunt.
-    const particleCount     = 260;
+    const particleCount = 260;
     const particlePositions = new Float32Array(particleCount * 3);
     for (let i = 0; i < particleCount; i++) {
-      const angle  = Math.random() * Math.PI * 2;
-      const radius = (Math.random() ** 1.8) * 2.8; // kwadraat zorgt voor meer deeltjes in het midden
-      particlePositions[i * 3]     = Math.cos(angle) * radius;
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.random() ** 1.8 * 2.8; // kwadraat zorgt voor meer deeltjes in het midden
+      particlePositions[i * 3] = Math.cos(angle) * radius;
       particlePositions[i * 3 + 1] = Math.sin(angle) * radius * 0.72; // licht afgeplat tot ellips
       particlePositions[i * 3 + 2] = 0.22 + Math.random() * 0.74;
     }
     const particleGeometry = new THREE.BufferGeometry();
-    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-    const particleMaterial = new THREE.PointsMaterial({ color: '#dfc179', size: 0.015, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
-    const particles        = new THREE.Points(particleGeometry, particleMaterial);
-    particles.renderOrder  = 4;
+    particleGeometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(particlePositions, 3),
+    );
+    const particleMaterial = new THREE.PointsMaterial({
+      color: "#dfc179",
+      size: 0.015,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const particles = new THREE.Points(particleGeometry, particleMaterial);
+    particles.renderOrder = 4;
     scene.add(particles);
 
     // ── Shockwave ring ────────────────────────────────────────────────────────
 
     // Een uitdijende ring die zichtbaar wordt op het moment van impact.
-    const shockwaveMaterial = new THREE.MeshBasicMaterial({ color: '#d1a14a', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
-    const shockwave         = new THREE.Mesh(new THREE.TorusGeometry(1, 0.01, 8, 72), shockwaveMaterial);
-    shockwave.position.z    = 0.22;
-    shockwave.renderOrder   = 4;
+    const shockwaveMaterial = new THREE.MeshBasicMaterial({
+      color: "#d1a14a",
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const shockwave = new THREE.Mesh(
+      new THREE.TorusGeometry(1, 0.01, 8, 72),
+      shockwaveMaterial,
+    );
+    shockwave.position.z = 0.22;
+    shockwave.renderOrder = 4;
     scene.add(shockwave);
 
     // ── Wall tile grid ────────────────────────────────────────────────────────
 
     // Alle 60 muurtegelme shes worden in één groep gehangen.
     // De groep is initieel onzichtbaar en wordt zichtbaar zodra de ingangsanimatie start.
-    const wallGroup    = new THREE.Group();
-    wallGroup.visible  = false;
+    const wallGroup = new THREE.Group();
+    wallGroup.visible = false;
     scene.add(wallGroup);
 
     const tiles = [];
     for (let i = 0; i < TILE_COUNT; i++) {
       // Wijs een speciaal materiaal toe aan de centrale slot en de buren ervan.
       let mat = emptyMaterial;
-      if (i === CURRENT_BRAND_INDEX)     mat = blankMaterial;      // centrale slot: leeg (wordt gevuld door de gebruiker)
-      if (i === CURRENT_BRAND_INDEX - 1) mat = ritualsMaterial;    // linker buurmerk
+      if (i === CURRENT_BRAND_INDEX) mat = blankMaterial; // centrale slot: leeg (wordt gevuld door de gebruiker)
+      if (i === CURRENT_BRAND_INDEX - 1) mat = ritualsMaterial; // linker buurmerk
       if (i === CURRENT_BRAND_INDEX + 1) mat = burgerkingMaterial; // rechter buurmerk
       const mesh = new THREE.Mesh(tileGeometry, mat);
       wallGroup.add(mesh);
@@ -562,10 +702,14 @@ export default function HeroScene({
 
     // Wijs tegels willekeurig toe aan groepen zodat ze in vluchten van 4 invliegen
     // in plaats van allemaal tegelijk of één voor één.
-    const GROUP_SIZE      = 4;
-    const shuffled        = Array.from({ length: TILE_COUNT }, (_, i) => i).sort(() => Math.random() - 0.5);
-    const tileGroup       = new Array(TILE_COUNT);
-    shuffled.forEach((idx, pos) => { tileGroup[idx] = Math.floor(pos / GROUP_SIZE); });
+    const GROUP_SIZE = 4;
+    const shuffled = Array.from({ length: TILE_COUNT }, (_, i) => i).sort(
+      () => Math.random() - 0.5,
+    );
+    const tileGroup = new Array(TILE_COUNT);
+    shuffled.forEach((idx, pos) => {
+      tileGroup[idx] = Math.floor(pos / GROUP_SIZE);
+    });
 
     // Sla per tegel de animatieparameters op: groep, vliegduur en startrand.
     const tileRng = tiles.map((_, i) => ({
@@ -578,9 +722,12 @@ export default function HeroScene({
     // ── Brand wall tile (de platte tegel die in de muur zit na invoeging) ──
 
     // Dit is een aparte mesh die zichtbaar wordt als de zwevende tegel in de muur "valt".
-    let currentBrandWallTile = new THREE.Mesh(tileGeometry, currentBrandMaterial.clone());
+    let currentBrandWallTile = new THREE.Mesh(
+      tileGeometry,
+      currentBrandMaterial.clone(),
+    );
     currentBrandWallTile.material.opacity = 0; // begint onzichtbaar
-    currentBrandWallTile.position.z       = 0.05;
+    currentBrandWallTile.position.z = 0.05;
     wallGroup.add(currentBrandWallTile);
 
     // ── Floating tile (de 3D-doos waarmee de gebruiker interageert) ───────────
@@ -600,32 +747,43 @@ export default function HeroScene({
     floatingMaterials[4].depthWrite = true; // occludeert stralen zodra het voor-vlak opaque is
     floatingMaterials[5].opacity    = 0;
 
-    let floatingTile         = new THREE.Mesh(floatingTileGeometry, floatingMaterials);
-    floatingTile.position.z  = 0.07;
+    let floatingTile = new THREE.Mesh(floatingTileGeometry, floatingMaterials);
+    floatingTile.position.z = 0.07;
     floatingTile.renderOrder = 3;
-    floatingTile.visible     = false;
+    floatingTile.visible = false;
     scene.add(floatingTile);
+    floatingTileRef.current = floatingTile;
 
     // ── Idle glow (gouden halo achter de vergrendelde tegel) ──────────────────
 
     // Een radiaal kleurverloop dat pulserende licht simuleert terwijl de gebruiker
     // nog niet geklikt heeft ("adem" effect).
-    const glowCanvas = document.createElement('canvas');
-    glowCanvas.width  = 256;
+    const glowCanvas = document.createElement("canvas");
+    glowCanvas.width = 256;
     glowCanvas.height = 256;
-    const glowCtx  = glowCanvas.getContext('2d');
+    const glowCtx = glowCanvas.getContext("2d");
     const glowGrad = glowCtx.createRadialGradient(128, 128, 0, 128, 128, 128);
-    glowGrad.addColorStop(0,    'rgba(210, 150, 10, 0.9)');
-    glowGrad.addColorStop(0.35, 'rgba(190, 120,  5, 0.5)');
-    glowGrad.addColorStop(0.65, 'rgba(160,  90,  0, 0.15)');
-    glowGrad.addColorStop(1.0,  'rgba(120,  60,  0, 0.0)');
+    glowGrad.addColorStop(0, "rgba(210, 150, 10, 0.9)");
+    glowGrad.addColorStop(0.35, "rgba(190, 120,  5, 0.5)");
+    glowGrad.addColorStop(0.65, "rgba(160,  90,  0, 0.15)");
+    glowGrad.addColorStop(1.0, "rgba(120,  60,  0, 0.0)");
     glowCtx.fillStyle = glowGrad;
     glowCtx.fillRect(0, 0, 256, 256);
 
-    const idleGlowMaterial = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(glowCanvas), transparent: true, opacity: 0, depthWrite: false, blending: THREE.NormalBlending, toneMapped: false });
-    const idleGlow         = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), idleGlowMaterial);
-    idleGlow.position.z    = -0.01;
-    idleGlow.renderOrder   = 2;
+    const idleGlowMaterial = new THREE.MeshBasicMaterial({
+      map: new THREE.CanvasTexture(glowCanvas),
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.NormalBlending,
+      toneMapped: false,
+    });
+    const idleGlow = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      idleGlowMaterial,
+    );
+    idleGlow.position.z = -0.01;
+    idleGlow.renderOrder = 2;
     floatingTile.add(idleGlow); // kind van floatingTile zodat hij meebeweegt
 
     // ── Rotatie-indicator: twee losse halve ellips-bogen met pijlpunten ─────────
@@ -691,18 +849,21 @@ export default function HeroScene({
     // ── Locked plate overlay ──────────────────────────────────────────────────
 
     // De vergrendelingsoverlay die bovenop de tegel zit totdat de gebruiker klikt.
-    let lockedPlate         = new THREE.Mesh(tileGeometry, lockedMaterial.clone());
-    lockedPlate.position.z  = TILE_DEPTH / 2 + 0.008;
+    let lockedPlate = new THREE.Mesh(tileGeometry, lockedMaterial.clone());
+    lockedPlate.position.z = TILE_DEPTH / 2 + 0.008;
     lockedPlate.renderOrder = 6;
     floatingTile.add(lockedPlate);
 
     // ── Crack overlay (2D gebakken textuurversie van de barst) ────────────────
 
     // Wordt zichtbaar tijdens de intro terwijl de tegel "barst".
-    let crackOverlay         = new THREE.Mesh(tileGeometry, crackOverlayMaterial.clone());
-    crackOverlay.position.z  = TILE_DEPTH / 2 + 0.026;
+    let crackOverlay = new THREE.Mesh(
+      tileGeometry,
+      crackOverlayMaterial.clone(),
+    );
+    crackOverlay.position.z = TILE_DEPTH / 2 + 0.026;
     crackOverlay.renderOrder = 10;
-    crackOverlay.visible     = false;
+    crackOverlay.visible = false;
     floatingTile.add(crackOverlay);
 
     // Flash-vlak: korte felle witte flits op het breukmoment
@@ -768,7 +929,7 @@ export default function HeroScene({
      * correct geprojecteerd wordt.
      */
     const createShardGeometry = (pts) => {
-      const geo       = new THREE.BufferGeometry();
+      const geo = new THREE.BufferGeometry();
       const positions = new Float32Array(pts.flatMap((p) => [p.x, p.y, 0]));
       const uvs       = new Float32Array(pts.flatMap((p) => [
         THREE.MathUtils.clamp(p.x + 0.5, 0, 1),
@@ -972,22 +1133,30 @@ export default function HeroScene({
     // ── Mutable animation state ───────────────────────────────────────────────
 
     // Lay-outvariabelen die bijgewerkt worden bij een resize.
-    let viewWidth  = 10, viewHeight = 6;
-    let tileWidth  = 1,  tileHeight = 1;
-    let wallLeft   = -5, wallTop    = 3, wallWidth = 10, wallHeight = 6;
-    let freeTileWidth = 1, freeTileHeight = 1;
-    let targetX = 0, targetY = 0; // world-positie van de centrale muurslot
-    let startX  = 0, startY  = 0; // rustpositie van de zwevende tegel
+    let viewWidth = 10,
+      viewHeight = 6;
+    let tileWidth = 1,
+      tileHeight = 1;
+    let wallLeft = -5,
+      wallTop = 3,
+      wallWidth = 10,
+      wallHeight = 6;
+    let freeTileWidth = 1,
+      freeTileHeight = 1;
+    let targetX = 0,
+      targetY = 0; // world-positie van de centrale muurslot
+    let startX = 0,
+      startY = 0; // rustpositie van de zwevende tegel
     let frameId = 0;
 
     // Toestandsvariabelen voor de invoeg-/extraheer-animatie.
-    let progress              = 0;  // 0 = bij de gebruiker, 1 = in de muur
-    let insertionStarted      = false;
+    let progress = 0; // 0 = bij de gebruiker, 1 = in de muur
+    let insertionStarted = false;
     let insertionFlightReleased = false;
-    let inserted              = false;
-    let extracting            = false;
-    let extractProgress       = 0;
-    let impactTime            = null; // tijdstip van inslag (voor naeffecten)
+    let inserted = false;
+    let extracting = false;
+    let extractProgress = 0;
+    let impactTime = null; // tijdstip van inslag (voor naeffecten)
 
     // Toestandsvariabelen voor de intro-sequentie.
     let introProgress         = 0;
@@ -1013,8 +1182,8 @@ export default function HeroScene({
     const introDuration         = introDelay + introAnimationDuration;
 
     // Pointer/drag-tracking.
-    const pointer      = { x: 0, y: 0, overTile: false };
-    const hoverWorld   = { x: 0, y: 0 };
+    const pointer = { x: 0, y: 0, overTile: false };
+    const hoverWorld = { x: 0, y: 0 };
     const targetRotation = { x: 0, y: 0 };
     const dragState    = { active: false, moved: false, lastX: 0, lastY: 0, rotationX: 0, rotationY: 0 };
     let userHasRotated = false; // blijft true zodra gebruiker ooit de tegel gedraaid heeft
@@ -1024,14 +1193,14 @@ export default function HeroScene({
     const droppedTileSounds = new Set();
 
     // Handmatige klok (vervangt de verouderde THREE.Clock constructorshandtekening).
-    let clockPrev    = performance.now() / 1000;
+    let clockPrev = performance.now() / 1000;
     let clockElapsed = 0;
 
     // Retourneert de tijd (in seconden) verstreken sinds de laatste aanroep.
     const clockGetDelta = () => {
-      const now    = performance.now() / 1000;
-      const delta  = now - clockPrev;
-      clockPrev    = now;
+      const now = performance.now() / 1000;
+      const delta = now - clockPrev;
+      clockPrev = now;
       clockElapsed += delta;
       return delta;
     };
@@ -1040,7 +1209,9 @@ export default function HeroScene({
      * Reset de vorige tijdstempel zodat de volgende delta niet een grote sprong geeft.
      * Gebruikt bij click-events om de klok na een gebruikersactie opnieuw te synchroniseren.
      */
-    const clockReset = () => { clockPrev = performance.now() / 1000; };
+    const clockReset = () => {
+      clockPrev = performance.now() / 1000;
+    };
 
     // Zet de vignet-overlay aan zodra de scène start.
     onFocusOverlayChange?.(true);
@@ -1048,7 +1219,7 @@ export default function HeroScene({
     // ── Audio ─────────────────────────────────────────────────────────────────
 
     let audioContext = null;
-    let dropBuffer   = null;
+    let dropBuffer = null;
     let audioLoading = false;
 
     /**
@@ -1056,16 +1227,26 @@ export default function HeroScene({
      * Gebruikt de Web Audio API. webkitAudioContext is de fallback voor Safari.
      */
     const ensureDropSound = () => {
-      const AC = window.AudioContext || /** @type {typeof AudioContext | undefined} */ (/** @type {unknown} */ (window).webkitAudioContext);
+      const AC =
+        window.AudioContext ||
+        /** @type {typeof AudioContext | undefined} */ (
+          /** @type {unknown} */ (window).webkitAudioContext
+        );
       if (!AC || audioLoading || dropBuffer) return;
       audioLoading = true;
       audioContext = audioContext || new AC();
       fetch(DROP_SOUND)
         .then((r) => r.arrayBuffer())
         .then((buf) => audioContext.decodeAudioData(buf))
-        .then((decoded) => { dropBuffer = decoded; })
-        .catch(() => { dropBuffer = null; })
-        .finally(() => { audioLoading = false; });
+        .then((decoded) => {
+          dropBuffer = decoded;
+        })
+        .catch(() => {
+          dropBuffer = null;
+        })
+        .finally(() => {
+          audioLoading = false;
+        });
     };
 
     /**
@@ -1075,9 +1256,9 @@ export default function HeroScene({
      */
     const playDropSound = (volume = 0.045) => {
       if (!dropBuffer || !audioContext) return;
-      const src  = audioContext.createBufferSource();
+      const src = audioContext.createBufferSource();
       const gain = audioContext.createGain();
-      src.buffer  = dropBuffer;
+      src.buffer = dropBuffer;
       gain.gain.value = volume;
       src.connect(gain).connect(audioContext.destination);
       src.start();
@@ -1103,38 +1284,39 @@ export default function HeroScene({
      * Gebruikt WALL_VIEWPORT om het raster correct te positioneren over de achtergrondafbeelding.
      */
     const layoutTiles = () => {
-      const width  = host.clientWidth  || 1;
+      const width = host.clientWidth || 1;
       const height = host.clientHeight || 1;
       const aspect = width / height;
 
       // De orthografische camera heeft altijd breedte 10; de hoogte schaalt mee.
-      viewWidth  = 10;
+      viewWidth = 10;
       viewHeight = viewWidth / aspect;
-      wallLeft   = -viewWidth  / 2 + viewWidth  * WALL_VIEWPORT.left;
-      wallTop    =  viewHeight / 2 - viewHeight * WALL_VIEWPORT.top;
-      wallWidth  = viewWidth  * WALL_VIEWPORT.width;
+      wallLeft = -viewWidth / 2 + viewWidth * WALL_VIEWPORT.left;
+      wallTop = viewHeight / 2 - viewHeight * WALL_VIEWPORT.top;
+      wallWidth = viewWidth * WALL_VIEWPORT.width;
       wallHeight = viewHeight * WALL_VIEWPORT.height;
-      tileWidth  = wallWidth  / TILE_COLS;
+      tileWidth = wallWidth / TILE_COLS;
       tileHeight = wallHeight / TILE_ROWS;
 
-      camera.left   = -viewWidth  / 2;
-      camera.right  =  viewWidth  / 2;
-      camera.top    =  viewHeight / 2;
+      camera.left = -viewWidth / 2;
+      camera.right = viewWidth / 2;
+      camera.top = viewHeight / 2;
       camera.bottom = -viewHeight / 2;
       camera.updateProjectionMatrix();
 
       renderer.setSize(width, height, false);
-      renderer.domElement.style.width  = '100%';
-      renderer.domElement.style.height = '100%';
+      renderer.domElement.style.width = "100%";
+      renderer.domElement.style.height = "100%";
       focusOverlay.scale.set(viewWidth, viewHeight, 1);
+      unlockOverlay.scale.set(viewWidth, viewHeight, 1);
 
       tiles.forEach((mesh, i) => {
         const col = i % TILE_COLS;
         const row = Math.floor(i / TILE_COLS);
 
         // World-ruimtepositie van het middelpunt van deze tegel.
-        const x   = wallLeft + tileWidth  * (col + 0.5);
-        const y   = wallTop  - tileHeight * (row + 0.5);
+        const x = wallLeft + tileWidth * (col + 0.5);
+        const y = wallTop - tileHeight * (row + 0.5);
 
         mesh.userData.baseX           = x;
         mesh.userData.baseY           = y;
@@ -1144,8 +1326,18 @@ export default function HeroScene({
         // Off-screen startpositie voor de invlieg-animatie (buiten het zichtbare vlak).
         const margin = 1.6;
         const { edge, edgeT } = tileRng[i];
-        mesh.userData.fromX = edge === 0 ? -viewWidth / 2 - margin : edge === 1 ? viewWidth / 2 + margin : edgeT * viewWidth  * 0.5;
-        mesh.userData.fromY = edge === 2 ?  viewHeight / 2 + margin : edge === 3 ? -viewHeight / 2 - margin : edgeT * viewHeight * 0.5;
+        mesh.userData.fromX =
+          edge === 0
+            ? -viewWidth / 2 - margin
+            : edge === 1
+              ? viewWidth / 2 + margin
+              : edgeT * viewWidth * 0.5;
+        mesh.userData.fromY =
+          edge === 2
+            ? viewHeight / 2 + margin
+            : edge === 3
+              ? -viewHeight / 2 - margin
+              : edgeT * viewHeight * 0.5;
 
         mesh.position.set(x, y, 0);
         mesh.scale.set(tileWidth, tileHeight, 1);
@@ -1155,15 +1347,17 @@ export default function HeroScene({
           targetY = y;
           currentBrandWallTile.position.set(x, y, 0.05);
           currentBrandWallTile.scale.set(tileWidth, tileHeight, 1);
-          currentBrandWallTile.userData.entranceDelay    = mesh.userData.entranceDelay;
-          currentBrandWallTile.userData.entranceDuration = mesh.userData.entranceDuration;
+          currentBrandWallTile.userData.entranceDelay =
+            mesh.userData.entranceDelay;
+          currentBrandWallTile.userData.entranceDuration =
+            mesh.userData.entranceDuration;
         }
       });
 
       // Rustpositie en -grootte van de zwevende tegel (geproportioneerd aan één tegel-slot).
       startX = 0;
       const freeTileBase = Math.min(tileWidth / TILE_ART_ASPECT, tileHeight);
-      freeTileWidth  = freeTileBase * TILE_ART_ASPECT;
+      freeTileWidth = freeTileBase * TILE_ART_ASPECT;
       freeTileHeight = freeTileBase;
       startY = viewHeight * 0.1;
 
@@ -1175,13 +1369,17 @@ export default function HeroScene({
           floatingTile.userData.entranceDuration = currentBrandWallTile.userData.entranceDuration ?? WALL_ENTRANCE_DURATION_MIN;
         } else {
           floatingTile.position.set(startX, startY, FREE_TILE_Z);
-          floatingTile.scale.set(freeTileWidth * FREE_TILE_SCALE, freeTileHeight * FREE_TILE_SCALE, 1);
+          floatingTile.scale.set(
+            freeTileWidth * FREE_TILE_SCALE,
+            freeTileHeight * FREE_TILE_SCALE,
+            1,
+          );
         }
       }
     };
 
     layoutTiles();
-    window.addEventListener('resize', layoutTiles);
+    window.addEventListener("resize", layoutTiles);
 
     // ── Pointer helpers ───────────────────────────────────────────────────────
 
@@ -1192,8 +1390,8 @@ export default function HeroScene({
     const clientToWorld = (e) => {
       const rect = host.getBoundingClientRect();
       return {
-        x: -viewWidth  / 2 + ((e.clientX - rect.left) / rect.width)  * viewWidth,
-        y:  viewHeight / 2 - ((e.clientY - rect.top)  / rect.height) * viewHeight,
+        x: -viewWidth / 2 + ((e.clientX - rect.left) / rect.width) * viewWidth,
+        y: viewHeight / 2 - ((e.clientY - rect.top) / rect.height) * viewHeight,
       };
     };
 
@@ -1201,10 +1399,12 @@ export default function HeroScene({
      * Controleert of een world-coördinaat binnen de bounding box van de zwevende tegel valt.
      */
     const isInsideFloatingTile = (world) => {
-      const hw = (floatingTile.scale.x || tileWidth)  / 2;
+      const hw = (floatingTile.scale.x || tileWidth) / 2;
       const hh = (floatingTile.scale.y || tileHeight) / 2;
-      return Math.abs(world.x - floatingTile.position.x) <= hw
-          && Math.abs(world.y - floatingTile.position.y) <= hh;
+      return (
+        Math.abs(world.x - floatingTile.position.x) <= hw &&
+        Math.abs(world.y - floatingTile.position.y) <= hh
+      );
     };
 
     /**
@@ -1212,7 +1412,7 @@ export default function HeroScene({
      */
     const getWallTileIndex = (world) => {
       const col = Math.floor((world.x - wallLeft) / tileWidth);
-      const row = Math.floor((wallTop - world.y)  / tileHeight);
+      const row = Math.floor((wallTop - world.y) / tileHeight);
       if (col < 0 || col >= TILE_COLS || row < 0 || row >= TILE_ROWS) return -1;
       return row * TILE_COLS + col;
     };
@@ -1228,7 +1428,8 @@ export default function HeroScene({
         hoverWorld.x = world.x;
         hoverWorld.y = world.y;
         hoveredWallTileIndex = getWallTileIndex(world);
-        host.style.cursor = hoveredWallTileIndex === CURRENT_BRAND_INDEX ? 'pointer' : 'default';
+        host.style.cursor =
+          hoveredWallTileIndex === CURRENT_BRAND_INDEX ? "pointer" : "default";
         return;
       }
 
@@ -1240,8 +1441,8 @@ export default function HeroScene({
 
       if (insertionStarted || extracting) return;
 
-      pointer.x       = world.x;
-      pointer.y       = world.y;
+      pointer.x = world.x;
+      pointer.y = world.y;
       pointer.overTile = isInsideFloatingTile(world);
 
       if (dragState.active) {
@@ -1255,21 +1456,29 @@ export default function HeroScene({
         dragState.rotationX += dy * 0.01;
         targetRotation.x = dragState.rotationX;
         targetRotation.y = dragState.rotationY;
-        host.style.cursor = 'grabbing';
+        host.style.cursor = "grabbing";
         return;
       }
 
       if (pointer.overTile) {
         // Subtiele kanteling richting de muisaanwijzer terwijl de tegel wordt gehovered.
-        const relX = THREE.MathUtils.clamp((world.x - floatingTile.position.x) / (floatingTile.scale.x / 2), -1, 1);
-        const relY = THREE.MathUtils.clamp((world.y - floatingTile.position.y) / (floatingTile.scale.y / 2), -1, 1);
+        const relX = THREE.MathUtils.clamp(
+          (world.x - floatingTile.position.x) / (floatingTile.scale.x / 2),
+          -1,
+          1,
+        );
+        const relY = THREE.MathUtils.clamp(
+          (world.y - floatingTile.position.y) / (floatingTile.scale.y / 2),
+          -1,
+          1,
+        );
         targetRotation.y = dragState.rotationY + relX * 0.12;
         targetRotation.x = dragState.rotationX - relY * 0.08;
-        host.style.cursor = 'grab';
+        host.style.cursor = "grab";
       } else {
-        targetRotation.x  = dragState.rotationX;
-        targetRotation.y  = dragState.rotationY;
-        host.style.cursor = 'pointer';
+        targetRotation.x = dragState.rotationX;
+        targetRotation.y = dragState.rotationY;
+        host.style.cursor = "pointer";
       }
     };
 
@@ -1279,34 +1488,36 @@ export default function HeroScene({
       const world = clientToWorld(e);
       if (!isInsideFloatingTile(world)) return;
       dragState.active = true;
-      dragState.moved  = false;
-      dragState.lastX  = e.clientX;
-      dragState.lastY  = e.clientY;
+      dragState.moved = false;
+      dragState.lastX = e.clientX;
+      dragState.lastY = e.clientY;
       host.setPointerCapture?.(e.pointerId); // zorg dat events doorkomen ook als de muis snel beweegt
-      host.style.cursor = 'grabbing';
+      host.style.cursor = "grabbing";
     };
 
     // Stop het slepen bij loslaten; sla de huidige rotatie op als startpunt.
     const handlePointerUp = (e) => {
       if (!dragState.active) return;
-      dragState.active    = false;
+      dragState.active = false;
       dragState.rotationX = floatingTile.rotation.x;
       dragState.rotationY = floatingTile.rotation.y;
       host.releasePointerCapture?.(e.pointerId);
-      host.style.cursor = pointer.overTile ? 'grab' : 'pointer';
+      host.style.cursor = pointer.overTile ? "grab" : "pointer";
     };
 
     // Reset hover-staat als de cursor het host-element verlaat.
     const handlePointerLeave = () => {
       if (dragState.active) return;
       hoveredWallTileIndex = -1;
-      pointer.overTile     = false;
-      targetRotation.x     = dragState.rotationX;
-      targetRotation.y     = dragState.rotationY;
-      host.style.cursor    = 'default';
+      pointer.overTile = false;
+      targetRotation.x = dragState.rotationX;
+      targetRotation.y = dragState.rotationY;
+      host.style.cursor = "default";
     };
 
     const handleClick = (e) => {
+      if (e.target.closest("[data-tile-download]")) return;
+
       const world = clientToWorld(e);
 
       if (introActive) {
@@ -1318,7 +1529,7 @@ export default function HeroScene({
           audioContext?.resume?.();
           clockReset();
           onStartIntroRequest?.();
-          host.style.cursor = 'default';
+          host.style.cursor = "default";
         }
         return;
       }
@@ -1328,67 +1539,86 @@ export default function HeroScene({
       if (inserted) {
         // Gebruiker klikt de ingevoegde tegel aan om hem terug te trekken.
         if (getWallTileIndex(world) !== CURRENT_BRAND_INDEX) return;
-        extracting            = true;
-        inserted              = false;
-        insertionStarted      = false;
+        extracting = true;
+        inserted = false;
+        insertionStarted = false;
         insertionFlightReleased = false;
-        extractProgress       = 0;
-        progress              = 1;
-        impactTime            = null;
-        hoveredWallTileIndex  = -1;
+        extractProgress = 0;
+        progress = 1;
+        impactTime = null;
+        hoveredWallTileIndex = -1;
         currentBrandWallTile.material.opacity = 0;
-        floatingMaterials.forEach((m) => { m.opacity = 1; });
-        targetRotation.x    = 0;
-        targetRotation.y    = 0;
+        floatingMaterials.forEach((m) => {
+          m.opacity = 1;
+        });
+        targetRotation.x = 0;
+        targetRotation.y = 0;
         dragState.rotationX = 0;
         dragState.rotationY = 0;
-        window.setTimeout(() => onFocusOverlayChange?.(true), 260);
-        host.style.cursor = 'grab';
+        setShowTileDownload(false);
+        window.setTimeout(() => {
+          onFocusOverlayChange?.(true);
+          setShowUnlockOverlay(true);
+        }, 260);
+        host.style.cursor = "grab";
         return;
       }
 
       if (insertionStarted) return;
-      if (dragState.moved)  { dragState.moved = false; return; } // sleep was geen klik
+      if (dragState.moved) {
+        dragState.moved = false;
+        return;
+      } // sleep was geen klik
 
       // Klik buiten de tegel: start de invoegvlucht.
       if (isInsideFloatingTile(world)) return;
-      insertionStarted      = true;
+      insertionStarted = true;
       insertionFlightReleased = false;
-      progress              = 0;
+      progress = 0;
+      setShowTileDownload(false);
+      setShowUnlockOverlay(false);
       onFocusOverlayChange?.(false);
       ensureDropSound();
       audioContext?.resume?.();
       clockReset();
-      targetRotation.x  = 0;
-      targetRotation.y  = 0;
-      host.style.cursor = 'default';
+      targetRotation.x = 0;
+      targetRotation.y = 0;
+      host.style.cursor = "default";
     };
 
-    host.addEventListener('pointerdown',  handlePointerDown);
-    host.addEventListener('pointermove',  handlePointerMove);
-    host.addEventListener('pointerup',    handlePointerUp);
-    host.addEventListener('pointercancel', handlePointerUp);
-    host.addEventListener('pointerleave', handlePointerLeave);
-    host.addEventListener('click',        handleClick);
+    host.addEventListener("pointerdown", handlePointerDown);
+    host.addEventListener("pointermove", handlePointerMove);
+    host.addEventListener("pointerup", handlePointerUp);
+    host.addEventListener("pointercancel", handlePointerUp);
+    host.addEventListener("pointerleave", handlePointerLeave);
+    host.addEventListener("click", handleClick);
 
     // ── Animation loop ────────────────────────────────────────────────────────
 
     const animate = () => {
       frameId = window.requestAnimationFrame(animate);
-      const delta   = Math.min(clockGetDelta(), 0.04); // begrens delta zodat een hik de animaties niet verstoort
+      const delta = Math.min(clockGetDelta(), 0.04); // begrens delta zodat een hik de animaties niet verstoort
       const elapsed = clockElapsed;
       let revealDustPulse = 0; // stofpuls die alleen tijdens de intro-onthulling actief is
 
       // ── Wall entrance (tegels vliegen vanuit de rand de muur in) ──────────
 
-      if (startWallEntranceRef.current && !wallEntranceActive && !wallEntranceComplete) {
-        wallEntranceActive    = true;
+      if (
+        startWallEntranceRef.current &&
+        !wallEntranceActive &&
+        !wallEntranceComplete
+      ) {
+        wallEntranceActive = true;
         wallEntranceStartedAt = elapsed + 0.08; // kleine vertraging voor rust
-        wallGroup.visible     = true;
-        floatingTile.visible  = true;
-        emptyMaterial.opacity = blankMaterial.opacity = ritualsMaterial.opacity = burgerkingMaterial.opacity = 1;
+        wallGroup.visible = true;
+        floatingTile.visible = true;
+        emptyMaterial.opacity =
+          blankMaterial.opacity =
+          ritualsMaterial.opacity =
+          burgerkingMaterial.opacity =
+            1;
         lockedPlate.material.opacity = 1;
-        lockedPlate.visible  = true;
+        lockedPlate.visible = true;
         layoutTiles();
       }
 
@@ -1413,7 +1643,9 @@ export default function HeroScene({
         const breathe = (Math.sin(elapsed * 1.1 - Math.PI / 2) + 1) / 2; // sinus → [0, 1]
         idleGlowMaterial.opacity = fadeIn * (0.25 + breathe * 0.6);
         idleGlow.scale.setScalar(3.0 + breathe * 2.5);
-        revealRays.forEach((r) => { r.visible = false; });
+        revealRays.forEach((r) => {
+          r.visible = false;
+        });
       }
 
       // Rotatie-pijlen: alleen in de vrij-fase (na intro, tegel groot voor camera, vóór insertie)
@@ -1454,12 +1686,19 @@ export default function HeroScene({
 
       // ── Tile entrance animation (zweef naar muurpositie) ──────────────────
 
-      if (introActive && !startIntroRef.current && floatingTile.visible && wallEntranceActive) {
-        const localT  = THREE.MathUtils.clamp(
-          (wallEntranceElapsed - (floatingTile.userData.entranceDelay ?? 0.2)) / (floatingTile.userData.entranceDuration ?? 1.4),
-          0, 1,
+      if (
+        introActive &&
+        !startIntroRef.current &&
+        floatingTile.visible &&
+        wallEntranceActive
+      ) {
+        const localT = THREE.MathUtils.clamp(
+          (wallEntranceElapsed - (floatingTile.userData.entranceDelay ?? 0.2)) /
+            (floatingTile.userData.entranceDuration ?? 1.4),
+          0,
+          1,
         );
-        const ease    = smootherStep(localT);
+        const ease = smootherStep(localT);
         const flyFromY = -viewHeight / 2 - 1.6;
         const floatArc = Math.sin(localT * Math.PI);
         const bob = Math.sin(wallEntranceElapsed * 2.1) * 0.055 * floatArc;
@@ -1470,8 +1709,13 @@ export default function HeroScene({
           (1 - ease) * 0.055 + Math.sin(wallEntranceElapsed * 1.75) * 0.035 * floatArc,
         );
         floatingTile.scale.set(tileWidth, tileHeight, 1);
-        floatingMaterials.forEach((m) => { m.opacity = 1; });
-        if (lockedPlate) { lockedPlate.material.opacity = ease; lockedPlate.visible = ease > 0.01; }
+        floatingMaterials.forEach((m) => {
+          m.opacity = 1;
+        });
+        if (lockedPlate) {
+          lockedPlate.material.opacity = ease;
+          lockedPlate.visible = ease > 0.01;
+        }
       }
 
       // ── Intro sequence (tegel vliegt uit, barst, onthult merkafbeelding) ──
@@ -1634,15 +1878,23 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
           THREE.MathUtils.lerp(0.07, FREE_TILE_Z, approachEase),
         );
         floatingTile.scale.set(
-          THREE.MathUtils.lerp(tileWidth,  freeTileWidth  * FREE_TILE_SCALE, smootherStep(approachT)),
-          THREE.MathUtils.lerp(tileHeight, freeTileHeight * FREE_TILE_SCALE, smootherStep(approachT)),
+          THREE.MathUtils.lerp(
+            tileWidth,
+            freeTileWidth * FREE_TILE_SCALE,
+            smootherStep(approachT),
+          ),
+          THREE.MathUtils.lerp(
+            tileHeight,
+            freeTileHeight * FREE_TILE_SCALE,
+            smootherStep(approachT),
+          ),
           1,
         );
         floatingTile.rotation.set(0, Math.sin(approachT * Math.PI) * 0.08, 0);
 
         // Intro afgerond: ruim alle effectobjecten op
         if (introProgress >= introDuration) {
-          introActive        = false;
+          introActive = false;
           introFlightStarted = false;
           onIntroComplete?.();
           setRevealStageLight(false);
@@ -1688,21 +1940,37 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
         // Damp de overlay-opaciteit richting 0; laat de vlucht pas starten als de overlay weg is.
         overlayOpacity = THREE.MathUtils.damp(overlayOpacity, 0, 7, delta);
         if (overlayOpacity < 0.015) insertionFlightReleased = true;
-        if (insertionFlightReleased) progress = Math.min(1, progress + delta / flightDuration);
+        if (insertionFlightReleased)
+          progress = Math.min(1, progress + delta / flightDuration);
       }
 
       // ── Extraction (tegel trekt terug uit de muur) ────────────────────────
 
       if (extracting) {
         extractProgress = Math.min(1, extractProgress + delta / 1.85);
-        progress        = 1 - easeInOutCubic(extractProgress); // omkeer: van 1 terug naar 0
-        if (extractProgress > 0.18) overlayOpacity = THREE.MathUtils.damp(overlayOpacity, FOCUS_OVERLAY_OPACITY, 2.8, delta);
+        progress = 1 - easeInOutCubic(extractProgress); // omkeer: van 1 terug naar 0
+        if (extractProgress > 0.18)
+          overlayOpacity = THREE.MathUtils.damp(
+            overlayOpacity,
+            FOCUS_OVERLAY_OPACITY,
+            2.8,
+            delta,
+          );
         if (extractProgress >= 1) {
           // Extractie voltooid: reset alle toestandsvariabelen.
-          extracting = insertionStarted = insertionFlightReleased = inserted = false;
-          progress   = extractProgress = 0;
-          targetRotation.x = targetRotation.y = dragState.rotationX = dragState.rotationY = 0;
+          extracting =
+            insertionStarted =
+            insertionFlightReleased =
+            inserted =
+              false;
+          progress = extractProgress = 0;
+          targetRotation.x =
+            targetRotation.y =
+            dragState.rotationX =
+            dragState.rotationY =
+              0;
           droppedTileSounds.clear();
+          setShowTileDownload(true);
         }
       }
 
@@ -1722,23 +1990,45 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
 
       // ── Floating tile transform ───────────────────────────────────────────
 
-      const eased  = easeInOutCubic(progress);
+      const eased = easeInOutCubic(progress);
       const settle = smootherStep(progress);
-      const arc    = Math.sin(progress * Math.PI);  // boogvorm: hoogste punt halverwege
-      const drift  = insertionStarted && !extracting ? Math.sin(elapsed * 1.35) * (1 - settle) * 0.035 : 0; // zachte zweefbeweging
+      const arc = Math.sin(progress * Math.PI); // boogvorm: hoogste punt halverwege
+      const drift =
+        insertionStarted && !extracting
+          ? Math.sin(elapsed * 1.35) * (1 - settle) * 0.035
+          : 0; // zachte zweefbeweging
 
       if (!introActive) {
         floatingTile.position.set(
           THREE.MathUtils.lerp(startX, targetX, eased) + drift,
-          THREE.MathUtils.lerp(startY, targetY, eased) + arc * tileHeight * 0.52,
+          THREE.MathUtils.lerp(startY, targetY, eased) +
+            arc * tileHeight * 0.52,
           THREE.MathUtils.lerp(FREE_TILE_Z, 0.07, eased),
         );
-        floatingTile.rotation.x = THREE.MathUtils.damp(floatingTile.rotation.x, insertionStarted || extracting ? 0 : targetRotation.x, 10, delta);
-        floatingTile.rotation.y = THREE.MathUtils.damp(floatingTile.rotation.y, insertionStarted || extracting ? 0 : targetRotation.y, 10, delta);
+        floatingTile.rotation.x = THREE.MathUtils.damp(
+          floatingTile.rotation.x,
+          insertionStarted || extracting ? 0 : targetRotation.x,
+          10,
+          delta,
+        );
+        floatingTile.rotation.y = THREE.MathUtils.damp(
+          floatingTile.rotation.y,
+          insertionStarted || extracting ? 0 : targetRotation.y,
+          10,
+          delta,
+        );
         floatingTile.rotation.z = 0;
         floatingTile.scale.set(
-          THREE.MathUtils.lerp(freeTileWidth  * FREE_TILE_SCALE, tileWidth,  settle),
-          THREE.MathUtils.lerp(freeTileHeight * FREE_TILE_SCALE, tileHeight, settle),
+          THREE.MathUtils.lerp(
+            freeTileWidth * FREE_TILE_SCALE,
+            tileWidth,
+            settle,
+          ),
+          THREE.MathUtils.lerp(
+            freeTileHeight * FREE_TILE_SCALE,
+            tileHeight,
+            settle,
+          ),
           1,
         );
       }
@@ -1755,7 +2045,7 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
 
       // Snap de ingevoegde toestand als de vlucht zijn eindpunt bereikt.
       if (insertionStarted && !extracting && !inserted && progress >= 1) {
-        inserted   = true;
+        inserted = true;
         impactTime = elapsed;
         onTileImpact?.();
         onTileInserted?.();
@@ -1766,17 +2056,25 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
 
       // Na de inslag: deeltjes uitzwermen vanuit het insertiepunt.
       // Vóór de inslag: deeltjes volgen de zwevende tegel (intro-dust).
-      const impactLife    = impactTime == null ? -1 : elapsed - impactTime;
-      const particlePulse = impactLife > 0 ? Math.exp(-impactLife * 0.95) : revealDustPulse;
+      const impactLife = impactTime == null ? -1 : elapsed - impactTime;
+      const particlePulse =
+        impactLife > 0 ? Math.exp(-impactLife * 0.95) : revealDustPulse;
       particles.position.set(
         impactLife > 0 ? targetX : floatingTile.position.x,
-        (impactLife > 0 ? targetY : floatingTile.position.y) + Math.sin(elapsed * 0.2) * 0.025,
+        (impactLife > 0 ? targetY : floatingTile.position.y) +
+          Math.sin(elapsed * 0.2) * 0.025,
         0.02,
       );
-      particles.rotation.z    = Math.sin(elapsed * 0.32) * 0.08 + Math.max(0, impactLife) * 0.18;
-      particles.scale.setScalar(impactLife > 0 ? 0.46 + Math.min(impactLife, 2.8) * 0.62 : 0.58 + revealDustPulse * 0.85);
+      particles.rotation.z =
+        Math.sin(elapsed * 0.32) * 0.08 + Math.max(0, impactLife) * 0.18;
+      particles.scale.setScalar(
+        impactLife > 0
+          ? 0.46 + Math.min(impactLife, 2.8) * 0.62
+          : 0.58 + revealDustPulse * 0.85,
+      );
       particleMaterial.opacity = particlePulse * (impactLife > 0 ? 0.58 : 0.5);
-      particleMaterial.size    = 0.015 + particlePulse * (impactLife > 0 ? 0.03 : 0.022);
+      particleMaterial.size =
+        0.015 + particlePulse * (impactLife > 0 ? 0.03 : 0.022);
 
       // Schokgolf uitdijt vanuit het insertiepunt gedurende 3,2 seconden.
       if (impactLife > 0 && impactLife < 3.2) {
@@ -1793,29 +2091,50 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
       const centerRow = Math.floor(CURRENT_BRAND_INDEX / TILE_COLS);
 
       tiles.forEach((mesh, i) => {
-        const col      = i % TILE_COLS;
-        const row      = Math.floor(i / TILE_COLS);
-        const dist     = Math.hypot(col - centerCol, row - centerRow); // afstand tot de centrale tegel
-        const waveT    = impactLife > 0 ? impactLife * 1.85 : -1;
-        const wave     = impactLife > 0 ? Math.max(0, 1 - Math.abs(waveT - dist) * 0.72) : 0; // ripple-puls
-        const damp     = Math.exp(Math.max(0, impactLife) * -0.38); // demping over de tijd
-        const tremor   = Math.sin(impactLife * 25 + dist * 2.2) * wave * damp; // trilling
-        const radialX  = col === centerCol && row === centerRow ? 0 : (col - centerCol) / Math.max(dist, 1);
-        const radialY  = col === centerCol && row === centerRow ? 0 : (row - centerRow) / Math.max(dist, 1);
+        const col = i % TILE_COLS;
+        const row = Math.floor(i / TILE_COLS);
+        const dist = Math.hypot(col - centerCol, row - centerRow); // afstand tot de centrale tegel
+        const waveT = impactLife > 0 ? impactLife * 1.85 : -1;
+        const wave =
+          impactLife > 0 ? Math.max(0, 1 - Math.abs(waveT - dist) * 0.72) : 0; // ripple-puls
+        const damp = Math.exp(Math.max(0, impactLife) * -0.38); // demping over de tijd
+        const tremor = Math.sin(impactLife * 25 + dist * 2.2) * wave * damp; // trilling
+        const radialX =
+          col === centerCol && row === centerRow
+            ? 0
+            : (col - centerCol) / Math.max(dist, 1);
+        const radialY =
+          col === centerCol && row === centerRow
+            ? 0
+            : (row - centerRow) / Math.max(dist, 1);
 
         // Speel een zacht tik-geluidje als de schokgolf de tegel bereikt.
-        if (impactLife > 0 && waveT - dist > 0.42 && !droppedTileSounds.has(i)) {
+        if (
+          impactLife > 0 &&
+          waveT - dist > 0.42 &&
+          !droppedTileSounds.has(i)
+        ) {
           droppedTileSounds.add(i);
           playDropSound(i === CURRENT_BRAND_INDEX ? 0.055 : 0.032);
         }
 
         // Hover-effect: tegel kantelt richting de muis als erover gehovered wordt.
-        const hover      = inserted && hoveredWallTileIndex === i ? 1 : 0;
-        const tremble    = hover ? Math.sin(elapsed * 28 + i * 0.7) * 0.04 : 0;
-        let hRX = 0, hRY = 0, hRZ = 0;
+        const hover = inserted && hoveredWallTileIndex === i ? 1 : 0;
+        const tremble = hover ? Math.sin(elapsed * 28 + i * 0.7) * 0.04 : 0;
+        let hRX = 0,
+          hRY = 0,
+          hRZ = 0;
         if (hover) {
-          const relX = THREE.MathUtils.clamp((hoverWorld.x - mesh.userData.baseX) / (tileWidth  / 2), -1, 1);
-          const relY = THREE.MathUtils.clamp((hoverWorld.y - mesh.userData.baseY) / (tileHeight / 2), -1, 1);
+          const relX = THREE.MathUtils.clamp(
+            (hoverWorld.x - mesh.userData.baseX) / (tileWidth / 2),
+            -1,
+            1,
+          );
+          const relY = THREE.MathUtils.clamp(
+            (hoverWorld.y - mesh.userData.baseY) / (tileHeight / 2),
+            -1,
+            1,
+          );
           hRY = relX * 0.42 + tremble * 0.82;
           hRX = -relY * 0.31 + tremble * 0.62;
           hRZ = Math.sin(elapsed * 22 + i) * 0.014;
@@ -1841,11 +2160,27 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
 
         mesh.position.set(ePX + radialX * wave * damp * 0.24 + tremor * 0.075, ePY - radialY * wave * damp * 0.24 + tremor * 0.012, ePZ + wave * damp * 0.14 + hover * 0.04);
         mesh.scale.set(tileWidth, tileHeight, 1);
-        mesh.material.opacity     = 1;
-        mesh.material.transparent = !wallEntranceComplete || mesh.material.transparent;
-        mesh.rotation.x = THREE.MathUtils.damp(mesh.rotation.x, eRX + hRX, 18, delta);
-        mesh.rotation.y = THREE.MathUtils.damp(mesh.rotation.y, eRY + hRY, 18, delta);
-        mesh.rotation.z = THREE.MathUtils.damp(mesh.rotation.z, eRZ + hRZ, 18, delta);
+        mesh.material.opacity = 1;
+        mesh.material.transparent =
+          !wallEntranceComplete || mesh.material.transparent;
+        mesh.rotation.x = THREE.MathUtils.damp(
+          mesh.rotation.x,
+          eRX + hRX,
+          18,
+          delta,
+        );
+        mesh.rotation.y = THREE.MathUtils.damp(
+          mesh.rotation.y,
+          eRY + hRY,
+          18,
+          delta,
+        );
+        mesh.rotation.z = THREE.MathUtils.damp(
+          mesh.rotation.z,
+          eRZ + hRZ,
+          18,
+          delta,
+        );
       });
 
       // ── Inserted brand tile hover ────────────────────────────────────────
@@ -1853,25 +2188,66 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
       // De platte muurversie van de merktegelheeft zijn eigen hover-kanteling.
       if (inserted) {
         const hover = hoveredWallTileIndex === CURRENT_BRAND_INDEX ? 1 : 0;
-        let hRX = 0, hRY = 0, hRZ = 0;
+        let hRX = 0,
+          hRY = 0,
+          hRZ = 0;
         if (hover) {
-          const relX    = THREE.MathUtils.clamp((hoverWorld.x - targetX) / (tileWidth  / 2), -1, 1);
-          const relY    = THREE.MathUtils.clamp((hoverWorld.y - targetY) / (tileHeight / 2), -1, 1);
-          const tremble = Math.sin(elapsed * 28 + CURRENT_BRAND_INDEX * 0.7) * 0.04;
-          hRY = relX * 0.5  + tremble;
+          const relX = THREE.MathUtils.clamp(
+            (hoverWorld.x - targetX) / (tileWidth / 2),
+            -1,
+            1,
+          );
+          const relY = THREE.MathUtils.clamp(
+            (hoverWorld.y - targetY) / (tileHeight / 2),
+            -1,
+            1,
+          );
+          const tremble =
+            Math.sin(elapsed * 28 + CURRENT_BRAND_INDEX * 0.7) * 0.04;
+          hRY = relX * 0.5 + tremble;
           hRX = -relY * 0.38 + tremble * 0.75;
           hRZ = Math.sin(elapsed * 22 + CURRENT_BRAND_INDEX) * 0.018;
         }
         currentBrandWallTile.position.z = 0.05 + hover * 0.045; // licht naar voren bij hover
-        currentBrandWallTile.rotation.x = THREE.MathUtils.damp(currentBrandWallTile.rotation.x, hRX, 18, delta);
-        currentBrandWallTile.rotation.y = THREE.MathUtils.damp(currentBrandWallTile.rotation.y, hRY, 18, delta);
-        currentBrandWallTile.rotation.z = THREE.MathUtils.damp(currentBrandWallTile.rotation.z, hRZ, 18, delta);
+        currentBrandWallTile.rotation.x = THREE.MathUtils.damp(
+          currentBrandWallTile.rotation.x,
+          hRX,
+          18,
+          delta,
+        );
+        currentBrandWallTile.rotation.y = THREE.MathUtils.damp(
+          currentBrandWallTile.rotation.y,
+          hRY,
+          18,
+          delta,
+        );
+        currentBrandWallTile.rotation.z = THREE.MathUtils.damp(
+          currentBrandWallTile.rotation.z,
+          hRZ,
+          18,
+          delta,
+        );
       } else {
         // Niet-ingevoegd: rotaties terugdampen naar nul.
         currentBrandWallTile.position.z = 0.05;
-        currentBrandWallTile.rotation.x = THREE.MathUtils.damp(currentBrandWallTile.rotation.x, 0, 10, delta);
-        currentBrandWallTile.rotation.y = THREE.MathUtils.damp(currentBrandWallTile.rotation.y, 0, 10, delta);
-        currentBrandWallTile.rotation.z = THREE.MathUtils.damp(currentBrandWallTile.rotation.z, 0, 10, delta);
+        currentBrandWallTile.rotation.x = THREE.MathUtils.damp(
+          currentBrandWallTile.rotation.x,
+          0,
+          10,
+          delta,
+        );
+        currentBrandWallTile.rotation.y = THREE.MathUtils.damp(
+          currentBrandWallTile.rotation.y,
+          0,
+          10,
+          delta,
+        );
+        currentBrandWallTile.rotation.z = THREE.MathUtils.damp(
+          currentBrandWallTile.rotation.z,
+          0,
+          10,
+          delta,
+        );
       }
 
       // ── Draw ─────────────────────────────────────────────────────────────
@@ -1879,7 +2255,10 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
       renderer.render(scene, camera);
 
       // Markeer het eerste frame als getekend en probeer onReady te sturen.
-      if (!firstFrameDone) { firstFrameDone = true; notifyReady(); }
+      if (!firstFrameDone) {
+        firstFrameDone = true;
+        notifyReady();
+      }
     };
 
     animate();
@@ -1890,13 +2269,13 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
     // alle event listeners en geef alle Three.js-resources vrij.
     return () => {
       window.cancelAnimationFrame(frameId);
-      window.removeEventListener('resize', layoutTiles);
-      host.removeEventListener('pointerdown',   handlePointerDown);
-      host.removeEventListener('pointermove',   handlePointerMove);
-      host.removeEventListener('pointerup',     handlePointerUp);
-      host.removeEventListener('pointercancel', handlePointerUp);
-      host.removeEventListener('pointerleave',  handlePointerLeave);
-      host.removeEventListener('click',         handleClick);
+      window.removeEventListener("resize", layoutTiles);
+      host.removeEventListener("pointerdown", handlePointerDown);
+      host.removeEventListener("pointermove", handlePointerMove);
+      host.removeEventListener("pointerup", handlePointerUp);
+      host.removeEventListener("pointercancel", handlePointerUp);
+      host.removeEventListener("pointerleave", handlePointerLeave);
+      host.removeEventListener("click", handleClick);
       setRevealStageLight(false);
 
       renderer.dispose();
@@ -1911,9 +2290,28 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
       [emptyMaterial, blankMaterial, ritualsMaterial, burgerkingMaterial, currentBrandMaterial, tileBackMaterial, ceramicSideMaterial, lockedMaterial, revealLightMaterial, crackOverlayMaterial].forEach((m) => m.dispose());
       currentBrandWallTile.material.dispose();
       floatingMaterials.forEach((m) => m.dispose());
-      if (host.contains(renderer.domElement)) host.removeChild(renderer.domElement);
+      if (host.contains(renderer.domElement))
+        host.removeChild(renderer.domElement);
+      floatingTileRef.current = null;
+      cameraRef.current = null;
     };
   }, []);
 
-  return <div ref={hostRef} className="webgl-tile-wall" aria-label="LiveWall WebGL tiles" />;
+  return (
+    <div className="hero-scene-root">
+      <div className="webgl-tile-wall">
+        <div
+          ref={hostRef}
+          className="absolute inset-0"
+          aria-label="LiveWall WebGL tiles"
+        />
+        <TileDownloadButton
+          visible={showTileDownload}
+          tileRef={floatingTileRef}
+          hostRef={hostRef}
+          cameraRef={cameraRef}
+        />
+      </div>
+    </div>
+  );
 }
