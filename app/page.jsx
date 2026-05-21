@@ -1,13 +1,4 @@
-"use client";
-
-import dynamic from "next/dynamic";
-
-const DigitalThankYouWall = dynamic(
-  () => import("@/components/digital-thank-you-wall"),
-  {
-    ssr: false,
-  },
-);
+import DigitalThankYouWall from '@/components/digital-thank-you-wall';
 
 export default function Home() {
   return <DigitalThankYouWall />;

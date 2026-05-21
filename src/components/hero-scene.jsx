@@ -59,6 +59,11 @@ const WALL_VIEWPORT = {
   height: 0.5356 * 0.964,
 };
 
+const WALL_ENTRANCE_GROUP_DELAY = 0.36;
+const WALL_ENTRANCE_DURATION_MIN = 2.35;
+const WALL_ENTRANCE_DURATION_VARIANCE = 0.75;
+const WALL_ENTRANCE_COMPLETE_AFTER = 8.5;
+
 // ─── Easing helpers ───────────────────────────────────────────────────────────
 
 /**
@@ -154,114 +159,217 @@ function loadImageTexture(url, renderer, version, onComplete) {
 }
 
 /**
- * Genereert procedureel een radiaal barst-patroon op een 2048×2048-canvas
- * en geeft die terug als een Three.js CanvasTexture.
- * De barst bestaat uit meerdere armen met zijvertakkingen, elk getekend in
- * drie lagen (hooglicht, inkt, schaduw) voor een keramische tegeluitstraling.
+ * Genereert een dynamische canvas-textuur waarop barsten frame voor frame
+ * vanuit het midden kunnen groeien. De paden worden vooraf willekeurig
+ * bepaald; update(progress, glowAmount) tekent alleen het zichtbare deel.
+ * glowAmount (0-1) voegt gouden lichtgloed toe tussen de barsten (licht dat
+ * door de scheuren sijpelt vlak voor de breuk).
  */
-function createCrackTexture(renderer) {
-  const size = 2048;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
+function createGrowingCrackTexture(renderer) {
+  const size   = 2048;
+  const canvas = document.createElement('canvas');
+  canvas.width  = size;
   canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, size, size);
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
+  const ctx    = canvas.getContext('2d');
+  ctx.lineCap  = 'round';
+  ctx.lineJoin = 'round';
 
-  // Middelpunt van de barst (hart van de tegel).
-  const center = { x: size * 0.5, y: size * 0.5 };
+  // Slagschaduw iets offset zodat barsten reliëf krijgen.
+  let center = { x: size * 0.5, y: size * 0.5 };
+  const paths = [];
+  const texture = configureTexture(new THREE.CanvasTexture(canvas), renderer);
 
-  // Elke seed bepaalt de hoek, lengte en breedte van één barstarm.
-  const seeds = [
-    { angle: -2.78, length: 0.5, width: 8 },
-    { angle: -2.2, length: 0.38, width: 5 },
-    { angle: -1.58, length: 0.54, width: 8 },
-    { angle: -1.02, length: 0.42, width: 5 },
-    { angle: -0.46, length: 0.58, width: 8 },
-    { angle: 0.08, length: 0.46, width: 6 },
-    { angle: 0.62, length: 0.5, width: 7 },
-    { angle: 1.18, length: 0.42, width: 5 },
-    { angle: 1.72, length: 0.52, width: 8 },
-    { angle: 2.3, length: 0.46, width: 6 },
-    { angle: 2.82, length: 0.56, width: 8 },
-  ];
+  const createPath = (angle, length, width, branchLevel = 0, startPoint = center) => {
+    let x = startPoint.x;
+    let y = startPoint.y;
+    let a = angle;
+    const points = [{ x, y }];
+    // Meer segmenten = vloeiendere, organischere barsten
+    const segments = 72 + Math.floor(Math.random() * 36);
 
-  /**
-   * Tekent één barstsegment als drie gestapelde lijnen:
-   * 1. Een breed, licht hooglicht voor diepteillusie.
-   * 2. De donkerblauwe hoofdlijn.
-   * 3. Een smalle donkere schaduw eronder voor reliëf.
-   */
-  const drawCrack = (points, width, alpha) => {
-    // Hooglicht (licht, iets verschoven)
-    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.55})`;
-    ctx.lineWidth = width * 1.65;
-    ctx.beginPath();
-    points.forEach((p, i) =>
-      i === 0 ? ctx.moveTo(p.x + 3, p.y - 2) : ctx.lineTo(p.x + 3, p.y - 2),
-    );
-    ctx.stroke();
+    for (let i = 1; i <= segments; i++) {
+      const t = i / segments;
+      // Stap varieert: kort aan begin (scherpe start), langer naar buiten
+      const stepBase = (length / segments) * (0.7 + t * 0.6);
+      const step = stepBase * (0.82 + Math.random() * 0.38);
+      // Kleine continue afwijking + zeldzame grote knik (geeft echte scheurkarakter)
+      a += (Math.random() - 0.5) * 0.13;
+      if (Math.random() < 0.06) a += (Math.random() - 0.5) * 0.9;
+      // Vroeg in de barst iets meer krom (impact-zone)
+      if (t < 0.2) a += (Math.random() - 0.5) * 0.08;
 
-    // Hoofdlijn (donkerblauw)
-    ctx.strokeStyle = `rgba(16, 53, 126, ${alpha})`;
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    points.forEach((p, i) =>
-      i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y),
-    );
-    ctx.stroke();
+      x += Math.cos(a) * step;
+      y += Math.sin(a) * step;
+      points.push({ x, y });
 
-    // Schaduw (donker, iets verschoven)
-    ctx.strokeStyle = `rgba(3, 16, 45, ${alpha * 0.38})`;
-    ctx.lineWidth = Math.max(1, width * 0.34);
-    ctx.beginPath();
-    points.forEach((p, i) =>
-      i === 0 ? ctx.moveTo(p.x - 2, p.y + 1) : ctx.lineTo(p.x - 2, p.y + 1),
-    );
-    ctx.stroke();
+      // Vertakkingen: meer van ze, ook dieper (level 3)
+      if (branchLevel < 3 && t > 0.18 && t < 0.88 && Math.random() < 0.1) {
+        const side = Math.random() > 0.5 ? 1 : -1;
+        const branchAngle  = a + side * (0.45 + Math.random() * 0.85);
+        const branchLength = length * (0.1 + Math.random() * 0.28);
+        const branchWidth  = width * (0.28 + Math.random() * 0.28);
+        paths.push(createPath(branchAngle, branchLength, branchWidth, branchLevel + 1, { x, y }));
+      }
+    }
+
+    return {
+      points,
+      width,
+      // Hoofdbarsten starten tegelijk; branches kort erna
+      delay: branchLevel * 0.08 + Math.random() * 0.06,
+      speed: 0.88 + Math.random() * 0.24,
+      isMain: branchLevel === 0,
+    };
   };
 
-  seeds.forEach((seed, si) => {
-    // Bereken de punten van de hoofdarm met lichte zigzag-variatie.
-    const points = [];
-    const segmentCount = 7 + (si % 4);
-    for (let s = 0; s <= segmentCount; s++) {
-      const t = s / segmentCount;
-      const angle =
-        seed.angle +
-        Math.sin(s * 2.45 + si * 0.8) * 0.13 +
-        Math.cos(s * 1.25 + si) * 0.06;
-      const radius =
-        size * seed.length * t * (0.45 + Math.sin(t * Math.PI) * 0.12);
-      points.push({
-        x: center.x + Math.cos(angle) * radius,
-        y: center.y + Math.sin(angle) * radius,
-      });
+  const regenerate = () => {
+    paths.length = 0;
+    // Licht geöffset impact-centrum voor meer realisme
+    center = {
+      x: size * (0.48 + (Math.random() - 0.5) * 0.06),
+      y: size * (0.48 + (Math.random() - 0.5) * 0.06),
+    };
+    // 12 hoofdbarsten i.p.v. 8 → dichtere spinnenweb-look
+    const mainCrackCount = 12;
+    for (let i = 0; i < mainCrackCount; i++) {
+      const baseAngle = (Math.PI * 2 * i) / mainCrackCount;
+      // Clusters van 2-3 barsten dicht bij elkaar voor organische look
+      const clusterOffset = (Math.random() - 0.5) * 0.28;
+      const angle  = baseAngle + clusterOffset;
+      const length = size * (0.38 + Math.random() * 0.36);
+      // Variabele dikte: 1-2 extra-dikke "primaire" barsten
+      const width  = i % 3 === 0 ? 14 + Math.random() * 8 : 6 + Math.random() * 8;
+      paths.push(createPath(angle, length, width));
     }
-    drawCrack(points, seed.width, 0.72);
+  };
 
-    // Voeg één of twee zijvertakkingen toe aan elke arm.
-    const branchCount = si % 2 === 0 ? 2 : 1;
-    for (let bi = 0; bi < branchCount; bi++) {
-      const root = points[Math.floor(points.length * (0.38 + bi * 0.18))];
-      const bAngle =
-        seed.angle + (bi % 2 === 0 ? 1 : -1) * (0.62 + Math.random() * 0.42);
-      const bLen = size * seed.length * (0.12 + Math.random() * 0.1);
-      const bPoints = [root];
-      for (let s = 1; s <= 4; s++) {
-        const t = s / 4;
-        const angle = bAngle + Math.sin(s * 1.9 + si) * 0.12;
-        bPoints.push({
-          x: root.x + Math.cos(angle) * bLen * t,
-          y: root.y + Math.sin(angle) * bLen * t,
-        });
-      }
-      drawCrack(bPoints, Math.max(2.2, seed.width * 0.42), 0.56);
+  const drawPartialPath = (path, visibleAmount, glowAmount) => {
+    const points  = path.points;
+    const maxIndex = Math.floor((points.length - 1) * visibleAmount);
+    if (maxIndex < 1) return;
+
+    // Gouden gloed-halo achter de barst (licht dat er doorheen sijpelt)
+    if (glowAmount > 0 && path.isMain) {
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i <= maxIndex; i++) ctx.lineTo(points[i].x, points[i].y);
+      ctx.strokeStyle = `rgba(255,210,80,${glowAmount * 0.55})`;
+      ctx.lineWidth   = path.width * 6.5;
+      ctx.shadowColor = 'rgba(255,180,30,0.9)';
+      ctx.shadowBlur  = path.width * 4;
+      ctx.stroke();
+      ctx.shadowBlur  = 0;
     }
-  });
 
-  return configureTexture(new THREE.CanvasTexture(canvas), renderer);
+    // Brede zachte witte rand (geeft diepte en verlichting)
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i <= maxIndex; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.strokeStyle = 'rgba(255,255,255,0.38)';
+    ctx.lineWidth   = path.width * 2.4;
+    ctx.stroke();
+
+    // Donkere kern van de scheur
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i <= maxIndex; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.strokeStyle = 'rgba(8,22,55,0.96)';
+    ctx.lineWidth   = path.width;
+    ctx.stroke();
+
+    // Fijne donkere schaduwlijn (geeft scheur diepte)
+    ctx.beginPath();
+    ctx.moveTo(points[0].x - 1.5, points[0].y + 1);
+    for (let i = 1; i <= maxIndex; i++) ctx.lineTo(points[i].x - 1.5, points[i].y + 1);
+    ctx.strokeStyle = 'rgba(0,5,20,0.34)';
+    ctx.lineWidth   = Math.max(1, path.width * 0.18);
+    ctx.stroke();
+
+    // Fijne witte highlight-lijn langs de bovenkant (maakt barst 3D)
+    ctx.beginPath();
+    ctx.moveTo(points[0].x + 1.5, points[0].y - 1);
+    for (let i = 1; i <= maxIndex; i++) ctx.lineTo(points[i].x + 1.5, points[i].y - 1);
+    ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+    ctx.lineWidth   = Math.max(0.8, path.width * 0.14);
+    ctx.stroke();
+
+    // Lichtpuntje aan het groeipunt van de barst
+    const head = points[maxIndex];
+    const headGlow = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, path.width * 1.8);
+    headGlow.addColorStop(0,   'rgba(255,255,255,0.95)');
+    headGlow.addColorStop(0.4, 'rgba(200,220,255,0.55)');
+    headGlow.addColorStop(1,   'rgba(255,255,255,0)');
+    ctx.fillStyle = headGlow;
+    ctx.beginPath();
+    ctx.arc(head.x, head.y, path.width * 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+  const update = (progress, glowAmount = 0) => {
+    ctx.clearRect(0, 0, size, size);
+
+    // Clip alles binnen de tegelgrens zodat barsten nooit buiten de tegel lopen.
+    // Kleine inset (40px) zodat de rand van het keramiek zichtbaar blijft.
+    const inset = 40;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(inset, inset, size - inset * 2, size - inset * 2);
+    ctx.clip();
+
+    // Impact-kern: groeiende witte gloed op het breekpunt
+    const centerRadius = 18 + progress * 180;
+    const impactGradient = ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, centerRadius);
+    impactGradient.addColorStop(0,    'rgba(255,255,255,0.98)');
+    impactGradient.addColorStop(0.22, 'rgba(255,240,180,0.82)');
+    impactGradient.addColorStop(0.55, 'rgba(255,200,60,0.3)');
+    impactGradient.addColorStop(1,    'rgba(255,200,60,0)');
+    ctx.fillStyle = impactGradient;
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, centerRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Teken branches eerst (onder de hoofdbarsten)
+    paths.forEach((path) => {
+      if (path.isMain) return;
+      const localProgress = THREE.MathUtils.clamp((progress - path.delay) * path.speed, 0, 1);
+      const eased = localProgress < 0.5
+        ? 2 * localProgress * localProgress
+        : 1 - ((-2 * localProgress + 2) ** 2) / 2;
+      drawPartialPath(path, eased, glowAmount * 0.6);
+    });
+
+    // Teken hoofdbarsten bovenop
+    paths.forEach((path) => {
+      if (!path.isMain) return;
+      const localProgress = THREE.MathUtils.clamp((progress - path.delay) * path.speed, 0, 1);
+      const eased = localProgress < 0.5
+        ? 2 * localProgress * localProgress
+        : 1 - ((-2 * localProgress + 2) ** 2) / 2;
+      drawPartialPath(path, eased, glowAmount);
+    });
+
+    // Gouden gloed-puls in het midden vlak voor de breuk
+    if (glowAmount > 0) {
+      const gCenterR = 60 + glowAmount * 280;
+      const gGrad = ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, gCenterR);
+      gGrad.addColorStop(0,   `rgba(255,220,80,${glowAmount * 0.88})`);
+      gGrad.addColorStop(0.3, `rgba(255,160,20,${glowAmount * 0.55})`);
+      gGrad.addColorStop(1,   'rgba(255,140,0,0)');
+      ctx.fillStyle = gGrad;
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, gCenterR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore(); // clip opheffen
+
+    texture.needsUpdate = true;
+  };
+
+  regenerate();
+  update(0);
+
+  return { texture, regenerate, update };
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -278,6 +386,7 @@ function createCrackTexture(renderer) {
  *   startIntro                 – zet op true om de ontgrendelsequentie te starten
  *   startWallEntrance          – zet op true om de tegels vanuit de rand te laten invliegen
  *   onStartIntroRequest        – aangeroepen als de gebruiker op de tegel klikt om de intro te starten
+ *   onWallEntranceComplete     – aangeroepen als het tegelraster klaar op de muur staat
  */
 export default function HeroScene({
   onReady,
@@ -286,7 +395,13 @@ export default function HeroScene({
   externalFocusOverlayVisible,
   startIntro = true,
   startWallEntrance = false,
+  lockedGlowEnabled = true,
+  unlockDimEnabled  = false,
   onStartIntroRequest,
+  onWallEntranceComplete,
+  onTileImpact,
+  onIntroComplete,
+  onTileInserted,
 } = {}) {
   const hostRef = useRef(null);
   const cameraRef = useRef(null);
@@ -298,21 +413,15 @@ export default function HeroScene({
   // altijd de meest recente waarden ziet zonder dat het effect opnieuw hoeft te draaien.
   const startIntroRef = useRef(startIntro);
   const startWallEntranceRef = useRef(startWallEntrance);
-  const externalOverlayRef = useRef(externalFocusOverlayVisible ?? true);
-  const showUnlockOverlayRef = useRef(false);
+  const lockedGlowEnabledRef = useRef(lockedGlowEnabled);
+  const externalOverlayRef  = useRef(externalFocusOverlayVisible ?? true);
 
-  useEffect(() => {
-    externalOverlayRef.current = externalFocusOverlayVisible ?? true;
-  }, [externalFocusOverlayVisible]);
-  useEffect(() => {
-    showUnlockOverlayRef.current = showUnlockOverlay;
-  }, [showUnlockOverlay]);
-  useEffect(() => {
-    startIntroRef.current = startIntro;
-  }, [startIntro]);
-  useEffect(() => {
-    startWallEntranceRef.current = startWallEntrance;
-  }, [startWallEntrance]);
+  useEffect(() => { externalOverlayRef.current  = externalFocusOverlayVisible ?? true; }, [externalFocusOverlayVisible]);
+  useEffect(() => { startIntroRef.current        = startIntro;        }, [startIntro]);
+  useEffect(() => { startWallEntranceRef.current = startWallEntrance; }, [startWallEntrance]);
+  useEffect(() => { lockedGlowEnabledRef.current  = lockedGlowEnabled; }, [lockedGlowEnabled]);
+  const unlockDimRef = useRef(unlockDimEnabled);
+  useEffect(() => { unlockDimRef.current = unlockDimEnabled; }, [unlockDimEnabled]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -415,8 +524,9 @@ export default function HeroScene({
       2048,
     );
 
-    // De barst-textuur wordt procedureel gegenereerd op de CPU (geen netwerk nodig).
-    const crackTexture = createCrackTexture(renderer);
+    // De barst-textuur wordt procedureel gegenereerd en tijdens de reveal per frame bijgewerkt.
+    const crackMask          = createGrowingCrackTexture(renderer);
+    const crackTexture       = crackMask.texture;
 
     // ── Materials ─────────────────────────────────────────────────────────────
 
@@ -469,25 +579,13 @@ export default function HeroScene({
     });
 
     // Gouden glans die de onthullingslichtstralen vormt (additief blenden = optellen van kleuren).
-    const revealLightMaterial = new THREE.MeshBasicMaterial({
-      color: "#ffe2a0",
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      toneMapped: false,
-      side: THREE.DoubleSide,
-    });
+    const revealLightMaterial = new THREE.MeshBasicMaterial({ color: '#ffd060', transparent: true, opacity: 0, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, toneMapped: false, side: THREE.DoubleSide });
 
     // Barst-overlay die over de tegel getekend wordt tijdens de ontgrendeling.
-    const crackOverlayMaterial = new THREE.MeshBasicMaterial({
-      color: "#ffffff",
-      map: crackTexture,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      toneMapped: false,
-    });
+    const crackOverlayMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff', map: crackTexture, transparent: true, opacity: 0, depthWrite: false, toneMapped: false, blending: THREE.NormalBlending });
+
+    // Flash-overlay materiaal (mesh aangemaakt na overlayGeometry hieronder)
+    const flashOverlayMaterial = new THREE.MeshBasicMaterial({ color: '#fff8e0', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
 
     // ── Shared geometries ─────────────────────────────────────────────────────
 
@@ -495,6 +593,11 @@ export default function HeroScene({
     const tileGeometry = new THREE.PlaneGeometry(1, 1); // platte muurtegelplane
     const floatingTileGeometry = new THREE.BoxGeometry(1, 1, TILE_DEPTH); // 3D-keramische doos
     const overlayGeometry = new THREE.PlaneGeometry(1, 1); // vignet en lichtoverlays
+
+    // Flash-overlay: felle witte flits op het moment van breuk
+    const flashOverlay = new THREE.Mesh(overlayGeometry, flashOverlayMaterial);
+    flashOverlay.renderOrder = 12;
+    flashOverlay.visible     = false;
 
     // ── Focus overlay ─────────────────────────────────────────────────────────
 
@@ -610,10 +713,10 @@ export default function HeroScene({
 
     // Sla per tegel de animatieparameters op: groep, vliegduur en startrand.
     const tileRng = tiles.map((_, i) => ({
-      group: tileGroup[i],
-      duration: 1.4 + Math.random() * 0.5,
-      edge: Math.floor(Math.random() * 4), // 0=links 1=rechts 2=boven 3=onder
-      edgeT: (Math.random() - 0.5) * 1.6, // positie langs de rand
+      group:    tileGroup[i],
+      duration: WALL_ENTRANCE_DURATION_MIN + Math.random() * WALL_ENTRANCE_DURATION_VARIANCE,
+      edge:     Math.floor(Math.random() * 4), // 0=links 1=rechts 2=boven 3=onder
+      edgeT:    (Math.random() - 0.5) * 1.6,  // positie langs de rand
     }));
 
     // ── Brand wall tile (de platte tegel die in de muur zit na invoeging) ──
@@ -639,11 +742,10 @@ export default function HeroScene({
       currentBrandMaterial.clone(),
       tileBackMaterial.clone(),
     ];
-    floatingMaterials.forEach((m) => {
-      m.transparent = true;
-    });
-    floatingMaterials[4].opacity = 0; // voor-vlak begint onzichtbaar (onthulling via intro)
-    floatingMaterials[5].opacity = 0; // achter-vlak idem
+    floatingMaterials.forEach((m) => { m.transparent = true; });
+    floatingMaterials[4].opacity    = 1; // branded vlak is altijd volledig zichtbaar, locked plate zit er bovenop
+    floatingMaterials[4].depthWrite = true; // occludeert stralen zodra het voor-vlak opaque is
+    floatingMaterials[5].opacity    = 0;
 
     let floatingTile = new THREE.Mesh(floatingTileGeometry, floatingMaterials);
     floatingTile.position.z = 0.07;
@@ -684,6 +786,66 @@ export default function HeroScene({
     idleGlow.renderOrder = 2;
     floatingTile.add(idleGlow); // kind van floatingTile zodat hij meebeweegt
 
+    // ── Rotatie-indicator: twee losse halve ellips-bogen met pijlpunten ─────────
+    // Elk ~150° boog, gap van ~30° aan beide kanten, zodat je duidelijk twee
+    // losse pijlen ziet. Plat liggend onder de tegel, sterk naar camera gekanteld.
+
+    // Twee materialen: boog iets transparanter, cone solide zodat ze geen strepen door elkaar geven
+    const rotMatArc  = new THREE.MeshBasicMaterial({ color: 0x4a6abf, transparent: true, opacity: 0, depthWrite: true, toneMapped: false });
+    const rotMatCone = new THREE.MeshBasicMaterial({ color: 0x4a6abf, transparent: true, opacity: 0, depthWrite: true, toneMapped: false });
+
+    const rotRingGroup = new THREE.Group();
+    const rx = 0.55, ry = 0.15, tube = 0.004;
+
+    function buildEllipseArc(startA, endA, segments) {
+      const pts = [];
+      for (let i = 0; i <= segments; i++) {
+        const a = startA + (endA - startA) * (i / segments);
+        pts.push(new THREE.Vector3(rx * Math.cos(a), ry * Math.sin(a), 0));
+      }
+      const path = new THREE.CatmullRomCurve3(pts);
+      return new THREE.TubeGeometry(path, segments, tube, 8, false);
+    }
+
+    const gap = 0.62;
+    const arcMesh1 = new THREE.Mesh(buildEllipseArc(gap, Math.PI - gap, 40), rotMatArc);
+    const arcMesh2 = new THREE.Mesh(buildEllipseArc(Math.PI + gap, Math.PI * 2 - gap, 40), rotMatArc);
+    arcMesh1.renderOrder = 7;
+    arcMesh2.renderOrder = 7;
+    rotRingGroup.add(arcMesh1);
+    rotRingGroup.add(arcMesh2);
+
+    // Pijlpunt boog 1
+    // Tangent op a1: richting = (−rx·sin(a1), ry·cos(a1)), genormaliseerd
+    const coneR = 0.010, coneH = 0.048;
+    const a1 = Math.PI - gap;
+    const tx1 = -rx * Math.sin(a1), ty1 = ry * Math.cos(a1);
+    const tlen1 = Math.sqrt(tx1 * tx1 + ty1 * ty1);
+    const tn1x = tx1 / tlen1, tn1y = ty1 / tlen1; // genormaliseerde tangent
+    const cone1 = new THREE.Mesh(new THREE.ConeGeometry(coneR, coneH, 12), rotMatCone);
+    // Center van cone = boog-uiteinde + (coneH/2) langs tangent (punt zit aan boog-kant)
+    cone1.position.set(rx * Math.cos(a1) + tn1x * (coneH / 2), ry * Math.sin(a1) + tn1y * (coneH / 2), 0);
+    cone1.rotation.z = Math.atan2(tn1y, tn1x) - Math.PI / 2;
+    cone1.renderOrder = 8;
+    rotRingGroup.add(cone1);
+
+    // Pijlpunt boog 2
+    const a2 = Math.PI * 2 - gap;
+    const tx2 = -rx * Math.sin(a2), ty2 = ry * Math.cos(a2);
+    const tlen2 = Math.sqrt(tx2 * tx2 + ty2 * ty2);
+    const tn2x = tx2 / tlen2, tn2y = ty2 / tlen2;
+    const cone2 = new THREE.Mesh(new THREE.ConeGeometry(coneR, coneH, 12), rotMatCone);
+    cone2.position.set(rx * Math.cos(a2) + tn2x * (coneH / 2), ry * Math.sin(a2) + tn2y * (coneH / 2), 0);
+    cone2.rotation.z = Math.atan2(tn2y, tn2x) - Math.PI / 2;
+    cone2.renderOrder = 8;
+    rotRingGroup.add(cone2);
+
+    rotRingGroup.rotation.x = Math.PI * 0.22;
+    rotRingGroup.renderOrder = 7;
+    scene.add(rotRingGroup);
+
+    function setArrowOpacity(val) { rotMatArc.opacity = val; rotMatCone.opacity = val; }
+
     // ── Locked plate overlay ──────────────────────────────────────────────────
 
     // De vergrendelingsoverlay die bovenop de tegel zit totdat de gebruiker klikt.
@@ -704,219 +866,268 @@ export default function HeroScene({
     crackOverlay.visible = false;
     floatingTile.add(crackOverlay);
 
-    // ── 3D crack tubes ────────────────────────────────────────────────────────
-
-    // Naast de 2D-overlay worden ook 3D-buizen getekend voor de barst.
-    // Elke buis volgt een CatmullRom-curve voor een organisch barst-uiterlijk.
-    const crackMaterial = new THREE.MeshBasicMaterial({
-      color: "#173f8c",
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      toneMapped: false,
-    });
-    const crackLines = [];
-
-    const crackSeeds = [
-      { angle: -2.75, length: 0.54 },
-      { angle: -2.18, length: 0.38 },
-      { angle: -1.62, length: 0.55 },
-      { angle: -1.12, length: 0.42 },
-      { angle: -0.56, length: 0.58 },
-      { angle: -0.08, length: 0.46 },
-      { angle: 0.48, length: 0.56 },
-      { angle: 1.02, length: 0.42 },
-      { angle: 1.54, length: 0.54 },
-      { angle: 2.1, length: 0.46 },
-      { angle: 2.64, length: 0.6 },
-    ];
-
-    /**
-     * Bouwt een TubeGeometry langs `points` en registreert hem in crackLines.
-     * opacityScale regelt hoe zichtbaar deze specifieke buis is ten opzichte van de rest.
-     */
-    const createCrackTube = (points, radius, opacityScale = 1) => {
-      const mesh = new THREE.Mesh(
-        new THREE.TubeGeometry(
-          new THREE.CatmullRomCurve3(points),
-          24,
-          radius,
-          7,
-          false,
-        ),
-        crackMaterial.clone(),
-      );
-      mesh.renderOrder = 9;
-      mesh.userData.opacityScale = opacityScale;
-      crackLines.push(mesh);
-      floatingTile.add(mesh);
-      return mesh;
-    };
-
-    crackSeeds.forEach((seed, si) => {
-      // Bereken de punten van de arm met kleine zigzag-variatie.
-      const segCount = 6 + (si % 4);
-      const pts = [];
-      for (let s = 0; s <= segCount; s++) {
-        const t = s / segCount;
-        const kink =
-          Math.sin(s * 2.7 + si) * 0.08 + Math.cos(s * 1.3 + si * 0.7) * 0.035;
-        const angle = seed.angle + kink;
-        const r = seed.length * t * (0.9 + Math.sin(t * Math.PI) * 0.08);
-        pts.push(
-          new THREE.Vector3(
-            Math.cos(angle) * r,
-            Math.sin(angle) * r,
-            TILE_DEPTH / 2 + 0.018,
-          ),
-        );
-      }
-      createCrackTube(pts, 0.0105, 1);
-
-      // Voeg een zijvertakking toe aan elke tweede arm.
-      if (si % 2 === 0) {
-        const root = pts[Math.floor(pts.length * 0.48)];
-        const bAngle =
-          seed.angle + (si % 4 < 2 ? 1 : -1) * (0.55 + Math.random() * 0.38);
-        const bLen = seed.length * (0.24 + Math.random() * 0.18);
-        const bPts = [root];
-        for (let s = 1; s <= 4; s++) {
-          const t = s / 4;
-          const kink = Math.sin(s * 1.8 + si) * 0.05;
-          bPts.push(
-            new THREE.Vector3(
-              root.x + Math.cos(bAngle + kink) * bLen * t,
-              root.y + Math.sin(bAngle + kink) * bLen * t,
-              TILE_DEPTH / 2 + 0.019,
-            ),
-          );
-        }
-        createCrackTube(bPts, 0.0065, 0.78);
-      }
-    });
+    // Flash-vlak: korte felle witte flits op het breukmoment
+    flashOverlay.position.z  = TILE_DEPTH / 2 + 0.032;
+    flashOverlay.scale.setScalar(1.08);
+    floatingTile.add(flashOverlay);
 
     // ── Reveal shards (keramische scherven die wegvliegen bij ontgrendeling) ──
 
     const revealShards = [];
 
+    const createShardMaterial = () => new THREE.ShaderMaterial({
+      uniforms: {
+        tileTexture:  { value: lockedTexture },
+        crackTexture: { value: crackTexture },
+        opacity:      { value: 0 },
+        glowAmount:   { value: 0 }, // 0-1: hoe sterk het licht door de scheuren gloeit
+      },
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec2 vUv;
+        uniform sampler2D tileTexture;
+        uniform sampler2D crackTexture;
+        uniform float opacity;
+        uniform float glowAmount;
+
+        void main() {
+          vec4 tile        = texture2D(tileTexture, vUv);
+          vec4 crackSample = texture2D(crackTexture, vUv);
+          // Scheurwaarde uit helderste kanaal
+          float crack     = max(crackSample.r, max(crackSample.g, crackSample.b));
+          float crackLine = smoothstep(0.06, 0.48, crack);
+
+          // Donkere scheur op de tegel
+          tile.rgb = mix(tile.rgb, vec3(0.04, 0.08, 0.18), crackLine * 0.72);
+          // Subtiele blauwe edge-highlight langs de scheurrand
+          tile.rgb += vec3(0.15, 0.22, 0.38) * crackLine * 0.18;
+
+          // Gouden lichtgloed door de scheuren (schemert net voor de breuk)
+          vec3 goldGlow = vec3(1.0, 0.78, 0.22);
+          float edgeGlow = smoothstep(0.35, 0.08, crack) * smoothstep(0.0, 0.12, crack);
+          tile.rgb += goldGlow * edgeGlow * glowAmount * 1.4;
+
+          tile.a *= opacity;
+          gl_FragColor = tile;
+        }
+      `,
+    });
+
     /**
-     * Bouwt een platte driehoeksgeometrie van een array met {x, y} punten.
+     * Bouwt een platte scherfgeometrie van een array met {x, y} punten.
      * UV-coördinaten worden afgeleid uit de positie zodat de vergrendelingstextuur
      * correct geprojecteerd wordt.
      */
     const createShardGeometry = (pts) => {
       const geo = new THREE.BufferGeometry();
       const positions = new Float32Array(pts.flatMap((p) => [p.x, p.y, 0]));
-      const uvs = new Float32Array(pts.flatMap((p) => [p.x + 0.5, p.y + 0.5]));
-      geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-      geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+      const uvs       = new Float32Array(pts.flatMap((p) => [
+        THREE.MathUtils.clamp(p.x + 0.5, 0, 1),
+        THREE.MathUtils.clamp(p.y + 0.5, 0, 1),
+      ]));
+      const indices = [];
+      for (let i = 1; i < pts.length - 1; i++) indices.push(0, i, i + 1);
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geo.setAttribute('uv',       new THREE.BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
       geo.computeVertexNormals();
       return geo;
     };
 
-    // Verdeel het tegeloppervlak in een 3×3-grid van scherven,
-    // elk opgesplitst in twee driehoeken.
-    const shardCols = 3;
-    const shardRows = 3;
-    for (let row = 0; row < shardRows; row++) {
-      for (let col = 0; col < shardCols; col++) {
-        const x0 = -0.5 + col / shardCols;
-        const x1 = -0.5 + (col + 1) / shardCols;
-        const y0 = 0.5 - row / shardRows;
-        const y1 = 0.5 - (row + 1) / shardRows;
-        const cx = (x0 + x1) / 2 + (Math.random() - 0.5) * 0.06;
-        const cy = (y0 + y1) / 2 + (Math.random() - 0.5) * 0.06;
-        const fwd = Math.random() > 0.5;
-        const triangles = fwd
-          ? [
-              [
-                { x: x0, y: y0 },
-                { x: x1, y: y0 + Math.random() * 0.035 },
-                { x: cx, y: cy },
-              ],
-              [
-                { x: x1, y: y1 },
-                { x: x0 + Math.random() * 0.035, y: y1 },
-                { x: cx, y: cy },
-              ],
-            ]
-          : [
-              [
-                { x: x0, y: y1 },
-                { x: x0, y: y0 - Math.random() * 0.035 },
-                { x: cx, y: cy },
-              ],
-              [
-                { x: x1, y: y0 },
-                { x: x1, y: y1 + Math.random() * 0.035 },
-                { x: cx, y: cy },
-              ],
-            ];
+    const tileHalf = 0.515;
+    const cornerPoints = [
+      { t: 1, x: tileHalf, y: tileHalf },
+      { t: 2, x: -tileHalf, y: tileHalf },
+      { t: 3, x: -tileHalf, y: -tileHalf },
+      { t: 4, x: tileHalf, y: -tileHalf },
+    ];
 
-        triangles.forEach((pts, ti) => {
-          const shard = new THREE.Mesh(
-            createShardGeometry(pts),
-            lockedMaterial.clone(),
-          );
-          const scx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
-          const scy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-          const dx = scx + (Math.random() - 0.5) * 0.34;
-          const dy = scy + (Math.random() - 0.5) * 0.34;
-          const len = Math.hypot(dx, dy) || 1;
-          shard.position.set(0, 0, TILE_DEPTH / 2 + 0.011 + ti * 0.002);
-          shard.renderOrder = 7 + ti;
+    const pointOnSquareEdge = (angle) => {
+      const x = Math.cos(angle);
+      const y = Math.sin(angle);
+      const scale = tileHalf / Math.max(Math.abs(x), Math.abs(y));
+      return { x: x * scale, y: y * scale };
+    };
 
-          // Sla de vluchtvectoren op in userData zodat de animatielus ze kan lezen.
-          shard.userData.baseX = 0;
-          shard.userData.baseY = 0;
-          shard.userData.centroidX = scx;
-          shard.userData.centroidY = scy;
-          shard.userData.breakX = (dx / len) * (1.65 + Math.random() * 1.55); // horizontale vluchtafstand
-          shard.userData.breakY = (dy / len) * (1.2 + Math.random() * 1.15); // verticale vluchtafstand
-          shard.userData.breakZ = 0.28 + Math.random() * 0.38; // dieptevlucht (naar voren)
-          shard.userData.rotX = (Math.random() - 0.5) * 5.6; // willekeurige tuimelrotatie
-          shard.userData.rotY = (Math.random() - 0.5) * 5.6;
-          shard.userData.rotZ = (Math.random() - 0.5) * 5.2;
-          revealShards.push(shard);
-          floatingTile.add(shard);
-        });
-      }
+    const edgeProgress = (p) => {
+      const eps = 0.0001;
+      if (Math.abs(p.x - tileHalf) < eps) return (p.y + tileHalf) / (tileHalf * 2);
+      if (Math.abs(p.y - tileHalf) < eps) return 1 + (tileHalf - p.x) / (tileHalf * 2);
+      if (Math.abs(p.x + tileHalf) < eps) return 2 + (tileHalf - p.y) / (tileHalf * 2);
+      return 3 + (p.x + tileHalf) / (tileHalf * 2);
+    };
+
+    const boundaryPointsBetween = (from, to) => {
+      const fromT = edgeProgress(from);
+      let toT = edgeProgress(to);
+      if (toT <= fromT) toT += 4;
+      return cornerPoints
+        .concat(cornerPoints.map((corner) => ({ ...corner, t: corner.t + 4 })))
+        .filter((corner) => corner.t > fromT && corner.t < toT)
+        .map((corner) => ({ x: corner.x, y: corner.y }));
+    };
+
+    const crackEdgePoints = (angle, edgePoint, side = 1) => {
+      const perpendicular = angle + Math.PI / 2;
+      return [0.22, 0.46, 0.72].map((t, index) => {
+        const wobble = Math.sin(index * 1.9 + angle * 3.1) * 0.026 + (Math.random() - 0.5) * 0.035;
+        return {
+          x: edgePoint.x * t + Math.cos(perpendicular) * wobble * side,
+          y: edgePoint.y * t + Math.sin(perpendicular) * wobble * side,
+        };
+      }).concat(edgePoint);
+    };
+
+    // Grote, onregelmatige sectoren volgen de hoofdbarsten naar de vierkante rand.
+    // Dat oogt meer als gebroken keramiek dan concentrische ringen.
+    const fractureCount = 8;
+    const angleOffset = Math.random() * Math.PI * 2;
+    const fractureAngles = Array.from({ length: fractureCount }, (_, i) => (
+      angleOffset + (Math.PI * 2 * i) / fractureCount + (Math.random() - 0.5) * 0.18
+    )).sort((a, b) => a - b);
+
+    for (let i = 0; i < fractureCount; i++) {
+      const a1 = fractureAngles[i];
+      const a2 = i === fractureCount - 1 ? fractureAngles[0] + Math.PI * 2 : fractureAngles[i + 1];
+      const edgeA = pointOnSquareEdge(a1);
+      const edgeB = pointOnSquareEdge(a2);
+      const center = { x: (Math.random() - 0.5) * 0.035, y: (Math.random() - 0.5) * 0.035 };
+      const edgePathA = crackEdgePoints(a1, edgeA, 1);
+      const edgePathB = crackEdgePoints(a2, edgeB, -1);
+      const pts = [
+        center,
+        ...edgePathA,
+        ...boundaryPointsBetween(edgeA, edgeB),
+        ...edgePathB.slice(0, -1).reverse(),
+      ];
+
+      const shard = new THREE.Mesh(createShardGeometry(pts), createShardMaterial());
+      shard.visible = false;
+      const scx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+      const scy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+      const dx = scx + (Math.random() - 0.5) * 0.18;
+      const dy = scy + (Math.random() - 0.5) * 0.18;
+      const len = Math.hypot(dx, dy) || 1;
+      shard.position.set(0, 0, TILE_DEPTH / 2 + 0.011 + i * 0.0008);
+      shard.renderOrder = 7 + i;
+
+      // Sla de vluchtvectoren op in userData zodat de animatielus ze kan lezen.
+      shard.userData.baseX = 0;
+      shard.userData.baseY = 0;
+      shard.userData.centroidX = scx;
+      shard.userData.centroidY = scy;
+      // Explosieve break-krachten: sterker dan voorheen, met een extra willekeurige component
+      const explosionPower = 1.0 + Math.random() * 0.6; // variatie per scherf
+      shard.userData.breakX = (dx / len) * (6.5 + Math.random() * 4.5) * explosionPower;
+      shard.userData.breakY = (dy / len) * (5.0 + Math.random() * 3.8) * explosionPower;
+      shard.userData.breakZ = 1.2 + Math.random() * 1.4;          // sterker naar voren schieten
+      shard.userData.exitZ  = -3.2 - Math.random() * 2.2;         // verder wegvliegen
+      // Veel agressievere rotatie bij uitbarsting
+      shard.userData.rotX = (Math.random() - 0.5) * 14.0;
+      shard.userData.rotY = (Math.random() - 0.5) * 14.0;
+      shard.userData.rotZ = (Math.random() - 0.5) * 16.0;
+      // Stagger: buitenste scherven starten iets later (concentrisch effect)
+      shard.userData.breakDelay = Math.hypot(scx, scy) * 0.08;
+      revealShards.push(shard);
+      floatingTile.add(shard);
     }
 
     // ── Reveal light rays (gouden lichtstralen bij ontgrendeling) ─────────────
+    // Shader-gebaseerde stralen: zacht verlopend van helder goud in het midden
+    // naar volledig transparant aan de randen en punt — geen harde knipranden.
+
+    const createRayMaterial = () => new THREE.ShaderMaterial({
+      uniforms: { opacity: { value: 0 } },
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+      vertexShader: `
+        attribute float aFade; // 0 = punt (transparant), 1 = basis (helder)
+        varying float vFade;
+        varying vec2 vUv;
+        void main() {
+          vFade = aFade;
+          vUv   = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float opacity;
+        varying float vFade;
+        varying vec2 vUv;
+        void main() {
+          // Langs de lengte: vervaagt naar de punt (vUv.y = 1 = punt)
+          float lenFade  = 1.0 - smoothstep(0.0, 1.0, vUv.y);
+          lenFade = pow(lenFade, 0.55); // iets minder agressief afvlakken
+          // Langs de breedte: zacht vervaagt naar de zijkanten (vUv.x = 0 of 1 = rand)
+          float sideFade = 1.0 - abs(vUv.x * 2.0 - 1.0);
+          sideFade = pow(sideFade, 0.42); // breed gloeiend midden
+          // Extra kern-gloed: heldere streep langs de middenas
+          float core = pow(sideFade, 4.0) * 0.9;
+          float alpha = (sideFade * lenFade + core) * opacity;
+          // Warme goud-naar-wit kleurovergang: kern is bijna wit, buitenrand dieper goud
+          vec3 innerColor = vec3(1.0, 0.97, 0.78);  // bijna wit-goud
+          vec3 outerColor = vec3(1.0, 0.72, 0.12);  // diep goud
+          vec3 col = mix(outerColor, innerColor, pow(sideFade, 1.8) * lenFade);
+          gl_FragColor = vec4(col * alpha, alpha);
+        }
+      `,
+    });
+
+    // Geometrie: een rechthoek met UV's zodat de shader de vervaging kan berekenen.
+    // aFade loopt van 1 (basis, helder) naar 0 (punt, transparant).
+    const createRayGeometry = () => {
+      const geo = new THREE.PlaneGeometry(1, 1, 1, 8);
+      // PlaneGeometry UV.y loopt van 0 (basis) naar 1 (punt) — dat is wat we willen.
+      // aFade = 1 - uv.y zodat de basis helder is.
+      const posArr  = geo.attributes.position.array;
+      const uvArr   = geo.attributes.uv.array;
+      const fadeArr = new Float32Array(posArr.length / 3);
+      for (let v = 0; v < fadeArr.length; v++) {
+        fadeArr[v] = 1.0 - uvArr[v * 2 + 1]; // 1 aan basis, 0 aan punt
+      }
+      geo.setAttribute('aFade', new THREE.BufferAttribute(fadeArr, 1));
+      return geo;
+    };
 
     const revealRays = [];
-    for (let i = 0; i < 18; i++) {
-      const rLen = 2.2 + Math.random() * 1.5;
-      const rW = 0.08 + Math.random() * 0.18;
+    const RAY_COUNT = 28; // meer stralen voor een voller lichteffect
+    for (let i = 0; i < RAY_COUNT; i++) {
+      const isLong   = i % 4 !== 3;
+      const rLen     = isLong ? 2.6 + Math.random() * 2.4 : 1.2 + Math.random() * 1.2;
+      const rW       = isLong ? 0.18 + Math.random() * 0.36 : 0.36 + Math.random() * 0.52;
 
-      // Elke lichtstraal is een plat driehoekje dat vanuit het midden uitwaaiert.
-      const rGeo = new THREE.BufferGeometry();
-      rGeo.setAttribute(
-        "position",
-        new THREE.BufferAttribute(
-          new Float32Array([
-            0,
-            0,
-            0,
-            -rW,
-            rLen,
-            0,
-            rW,
-            rLen * (0.82 + Math.random() * 0.28),
-            0,
-          ]),
-          3,
-        ),
-      );
-      const ray = new THREE.Mesh(rGeo, revealLightMaterial.clone());
-      ray.position.set(0, 0, TILE_DEPTH / 2 + 0.009);
-      ray.rotation.z = (i / 18) * Math.PI * 2 + (Math.random() - 0.5) * 0.18;
-      ray.renderOrder = 5;
-      ray.userData.phase = i * 0.31 + Math.random() * 0.8; // faseverschuiving voor organisch pulseren
-      ray.userData.baseScale = 0.6 + Math.random() * 0.8;
+      const geo = createRayGeometry();
+      const mat = createRayMaterial();
+      const ray = new THREE.Mesh(geo, mat);
+
+      // Ankerpunt: straal groeit vanuit y=0, punt zit bij y=rLen
+      // PlaneGeometry staat gecentreerd, dus verschuif het zodat de basis op y=0 zit
+      ray.geometry.translate(0, 0.5, 0); // basis naar y=0, punt naar y=1
+
+      ray.renderOrder    = 1;
+      ray.userData.rLen      = rLen;
+      ray.userData.rW        = rW;
+      ray.userData.phase     = i * 0.18 + Math.random() * 0.55;
+      ray.userData.baseScale = 0.7 + Math.random() * 0.6;
+      ray.userData.rotSpeed  = (Math.random() - 0.5) * 0.08;
+      ray.userData.initRotZ  = (i / RAY_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+      ray.visible = false;
       revealRays.push(ray);
-      floatingTile.add(ray);
+      scene.add(ray);
     }
 
     // ── Mutable animation state ───────────────────────────────────────────────
@@ -948,37 +1159,34 @@ export default function HeroScene({
     let impactTime = null; // tijdstip van inslag (voor naeffecten)
 
     // Toestandsvariabelen voor de intro-sequentie.
-    let introProgress = 0;
-    let introActive = true;
-    let introFlightStarted = false;
-    let introSoundPlayed = false;
+    let introProgress         = 0;
+    let introActive           = true;
+    let introFlightStarted    = false;
+    let introSoundPlayed      = false;
+    let introCrackGenerated   = false;
     let revealStageLightVisible = false;
 
     // Toestandsvariabelen voor de muur-ingangsanimatie.
-    let wallEntranceActive = false;
-    let wallEntranceComplete = false;
+    let wallEntranceActive    = false;
+    let wallEntranceComplete  = false;
+    let wallEntranceCompleteNotified = false;
     let wallEntranceStartedAt = 0;
-    let glowStartTime = -1;
-    let overlayOpacity = FOCUS_OVERLAY_OPACITY;
-    let unlockOverlayOpacity = 0;
+    let glowStartTime         = -1;
+    let arrowStartTime        = -1;
+    let rayFadeStartTime      = -1; // tijdstip waarop de lichtstralen beginnen uit te faden
+    let overlayOpacity        = FOCUS_OVERLAY_OPACITY;
 
-    const flightDuration = 3.15; // seconden voor de invoegvlucht
-    const introDelay = 5; // seconden wachten voor de intro-animatie start
-    const introAnimationDuration = 7.1; // seconden voor de volledige intro-animatie
-    const introDuration = introDelay + introAnimationDuration;
+    const flightDuration        = 3.15; // seconden voor de invoegvlucht
+    const introDelay            = 5;    // seconden wachten voor de intro-animatie start
+    const introAnimationDuration = 12.0; // seconden voor de volledige intro-animatie
+    const introDuration         = introDelay + introAnimationDuration;
 
     // Pointer/drag-tracking.
     const pointer = { x: 0, y: 0, overTile: false };
     const hoverWorld = { x: 0, y: 0 };
     const targetRotation = { x: 0, y: 0 };
-    const dragState = {
-      active: false,
-      moved: false,
-      lastX: 0,
-      lastY: 0,
-      rotationX: 0,
-      rotationY: 0,
-    };
+    const dragState    = { active: false, moved: false, lastX: 0, lastY: 0, rotationX: 0, rotationY: 0 };
+    let userHasRotated = false; // blijft true zodra gebruiker ooit de tegel gedraaid heeft
     let hoveredWallTileIndex = -1;
 
     // Bijhouden welke tegels hun ripple-geluid al afgespeeld hebben na de inslag.
@@ -1110,9 +1318,9 @@ export default function HeroScene({
         const x = wallLeft + tileWidth * (col + 0.5);
         const y = wallTop - tileHeight * (row + 0.5);
 
-        mesh.userData.baseX = x;
-        mesh.userData.baseY = y;
-        mesh.userData.entranceDelay = 0.15 + tileRng[i].group * 0.28;
+        mesh.userData.baseX           = x;
+        mesh.userData.baseY           = y;
+        mesh.userData.entranceDelay   = 0.18 + tileRng[i].group * WALL_ENTRANCE_GROUP_DELAY;
         mesh.userData.entranceDuration = tileRng[i].duration;
 
         // Off-screen startpositie voor de invlieg-animatie (buiten het zichtbare vlak).
@@ -1157,10 +1365,8 @@ export default function HeroScene({
         if (introActive) {
           floatingTile.position.set(targetX, targetY, 0.07);
           floatingTile.scale.set(tileWidth, tileHeight, 1);
-          floatingTile.userData.entranceDelay =
-            currentBrandWallTile.userData.entranceDelay ?? 0.2;
-          floatingTile.userData.entranceDuration =
-            currentBrandWallTile.userData.entranceDuration ?? 1.05;
+          floatingTile.userData.entranceDelay    = currentBrandWallTile.userData.entranceDelay    ?? 0.2;
+          floatingTile.userData.entranceDuration = currentBrandWallTile.userData.entranceDuration ?? WALL_ENTRANCE_DURATION_MIN;
         } else {
           floatingTile.position.set(startX, startY, FREE_TILE_Z);
           floatingTile.scale.set(
@@ -1229,10 +1435,7 @@ export default function HeroScene({
 
       if (introActive) {
         // Tijdens de intro: pointer-cursor alleen als de tegel aanklikbaar is.
-        host.style.cursor =
-          !startIntroRef.current && isInsideFloatingTile(world)
-            ? "pointer"
-            : "default";
+        host.style.cursor = !startIntroRef.current && lockedGlowEnabledRef.current && isInsideFloatingTile(world) ? 'pointer' : 'default';
         return;
       }
 
@@ -1248,7 +1451,7 @@ export default function HeroScene({
         const dy = e.clientY - dragState.lastY;
         dragState.lastX = e.clientX;
         dragState.lastY = e.clientY;
-        if (Math.abs(dx) + Math.abs(dy) > 1) dragState.moved = true;
+        if (Math.abs(dx) + Math.abs(dy) > 1) { dragState.moved = true; userHasRotated = true; }
         dragState.rotationY += dx * 0.012;
         dragState.rotationX += dy * 0.01;
         targetRotation.x = dragState.rotationX;
@@ -1319,7 +1522,7 @@ export default function HeroScene({
 
       if (introActive) {
         // Gebruiker klikt de zwevende tegel aan om de ontgrendelsequentie te starten.
-        if (!startIntroRef.current && isInsideFloatingTile(world)) {
+        if (!startIntroRef.current && lockedGlowEnabledRef.current && isInsideFloatingTile(world)) {
           startIntroRef.current = true;
           introProgress = introDelay; // sla de wachttijd over zodat de animatie meteen begint
           ensureDropSound();
@@ -1419,37 +1622,66 @@ export default function HeroScene({
         layoutTiles();
       }
 
-      const wallEntranceElapsed =
-        wallEntranceActive || wallEntranceComplete
-          ? elapsed - wallEntranceStartedAt
-          : -1;
-      if (wallEntranceActive && wallEntranceElapsed > 7.0) {
-        wallEntranceActive = false;
+      const wallEntranceElapsed = wallEntranceActive || wallEntranceComplete ? elapsed - wallEntranceStartedAt : -1;
+      if (wallEntranceActive && wallEntranceElapsed > WALL_ENTRANCE_COMPLETE_AFTER) {
+        wallEntranceActive   = false;
         wallEntranceComplete = true;
         layoutTiles();
-        host.style.cursor = introActive ? "default" : "pointer";
+        if (!wallEntranceCompleteNotified) {
+          wallEntranceCompleteNotified = true;
+          onWallEntranceComplete?.();
+        }
+        host.style.cursor = introActive && lockedGlowEnabledRef.current ? 'pointer' : 'default';
       }
 
       // ── Idle glow (ademende halo terwijl er gewacht wordt op klik) ────────
 
-      if (
-        introActive &&
-        !startIntroRef.current &&
-        floatingTile.visible &&
-        wallEntranceComplete
-      ) {
+      if (introActive && !startIntroRef.current && floatingTile.visible && wallEntranceComplete && lockedGlowEnabledRef.current) {
         if (glowStartTime < 0) glowStartTime = elapsed;
-        const fadeIn = THREE.MathUtils.clamp(
-          (elapsed - glowStartTime) / 1.0,
-          0,
-          1,
-        );
+        const glowElapsed = elapsed - glowStartTime;
+        const fadeIn  = THREE.MathUtils.clamp(glowElapsed / 1.0, 0, 1);
         const breathe = (Math.sin(elapsed * 1.1 - Math.PI / 2) + 1) / 2; // sinus → [0, 1]
         idleGlowMaterial.opacity = fadeIn * (0.25 + breathe * 0.6);
         idleGlow.scale.setScalar(3.0 + breathe * 2.5);
         revealRays.forEach((r) => {
           r.visible = false;
         });
+      }
+
+      // Rotatie-pijlen: alleen in de vrij-fase (na intro, tegel groot voor camera, vóór insertie)
+      if (!introActive && !insertionStarted && !inserted && !extracting && floatingTile.visible) {
+        if (arrowStartTime < 0) arrowStartTime = elapsed;
+        const arrowElapsed = elapsed - arrowStartTime;
+        const fadeIn = THREE.MathUtils.clamp(arrowElapsed / 1.2, 0, 1);
+
+        const pulsePeriod  = 7.0;  // totale periode
+        const pulseOn      = 5.5;  // hoe lang zichtbaar per pulse
+        const arrowDelay   = 0.5;
+        const arrowT       = Math.max(0, arrowElapsed - arrowDelay);
+        const pulsePhase   = arrowT % pulsePeriod;
+        const pulseRaw     = pulsePhase < pulseOn ? Math.sin((pulsePhase / pulseOn) * Math.PI) : 0;
+        const pulseCount   = Math.floor(arrowT / pulsePeriod);
+        const arrowOpacity = pulseCount < 3 ? fadeIn * pulseRaw * 0.75 : 0;
+        setArrowOpacity(arrowOpacity);
+
+        // Tegel kantelt sterk links/rechts via targetRotation zodat het niet overschreven wordt
+        // Kanteling gaat rustig door totdat gebruiker ooit de tegel zelf gedraaid heeft
+        if (!dragState.active && !userHasRotated) {
+          targetRotation.y = Math.sin(arrowElapsed * 0.4) * 0.55;
+        }
+
+        // Ring schalen naar werkelijke tegelgrootte, onder de tegel plaatsen
+        const tileScaleX = floatingTile.scale.x;
+        const tileScaleY = floatingTile.scale.y;
+        rotRingGroup.scale.setScalar(tileScaleX * 1.05);
+        rotRingGroup.position.set(
+          floatingTile.position.x,
+          floatingTile.position.y - tileScaleY * 0.75,  // ruim onder de tegel
+          floatingTile.position.z + 0.05,
+        );
+      } else {
+        setArrowOpacity(0);
+        arrowStartTime = -1;
       }
 
       // ── Tile entrance animation (zweef naar muurpositie) ──────────────────
@@ -1468,15 +1700,13 @@ export default function HeroScene({
         );
         const ease = smootherStep(localT);
         const flyFromY = -viewHeight / 2 - 1.6;
-        floatingTile.position.set(
-          targetX,
-          THREE.MathUtils.lerp(flyFromY, targetY, ease),
-          0.07,
-        );
+        const floatArc = Math.sin(localT * Math.PI);
+        const bob = Math.sin(wallEntranceElapsed * 2.1) * 0.055 * floatArc;
+        floatingTile.position.set(targetX, THREE.MathUtils.lerp(flyFromY, targetY, ease) + bob, 0.07 + floatArc * 0.1);
         floatingTile.rotation.set(
-          (1 - ease) * -0.18,
-          (1 - ease) * 0.12,
-          (1 - ease) * 0.04,
+          (1 - ease) * -0.2 + Math.sin(wallEntranceElapsed * 1.45) * 0.045 * floatArc,
+          (1 - ease) * 0.14 + Math.cos(wallEntranceElapsed * 1.25) * 0.04 * floatArc,
+          (1 - ease) * 0.055 + Math.sin(wallEntranceElapsed * 1.75) * 0.035 * floatArc,
         );
         floatingTile.scale.set(tileWidth, tileHeight, 1);
         floatingMaterials.forEach((m) => {
@@ -1492,153 +1722,159 @@ export default function HeroScene({
 
       if (introActive && startIntroRef.current) {
         idleGlowMaterial.opacity = 0;
-        revealRays.forEach((r) => {
-          r.visible = false;
-          r.material.opacity = 0;
-        });
+        setArrowOpacity(0);
+        revealRays.forEach((r) => { r.visible = false; r.material.uniforms.opacity.value = 0; });
+        if (!introCrackGenerated) {
+          introCrackGenerated = true;
+          crackMask.regenerate();
+          crackMask.update(0);
+        }
 
         introProgress = Math.min(introDuration, introProgress + delta);
-        const introT = THREE.MathUtils.clamp(
-          (introProgress - introDelay) / introAnimationDuration,
-          0,
-          1,
-        );
+        const introT  = THREE.MathUtils.clamp((introProgress - introDelay) / introAnimationDuration, 0, 1);
 
-        // Elke fase heeft een eigen genormaliseerde tijdwaarde (clamp naar [0, 1]).
-        const approachT = THREE.MathUtils.clamp(introT / 0.3, 0, 1); // tegel vliegt naar voren
+        // ── Fasedefinities (genormaliseerd naar introT [0,1]) ─────────────────
+        // approachT : tegel vliegt naar voren naar de camera
+        // crackT    : barsten groeien langzaam vanuit het midden
+        // glowT     : gouden gloed sijpelt door de scheuren (vlak voor breuk)
+        // breakT    : scherven exploderen naar buiten
+        // flashT    : felle witte flits op het breukmoment
+        // revealT   : merkafbeelding verschijnt
+        // fadeOutT  : vergrendelingsoverlay vervaagt
+        // lightT    : gouden lichtstralen waaieren open
+        const approachT   = THREE.MathUtils.clamp(introT / 0.27, 0, 1);
         const approachEase = easeInOutCubic(approachT);
-        const crackT = THREE.MathUtils.clamp((introT - 0.3) / 0.44, 0, 1); // barst groeit
-        const breakT = THREE.MathUtils.clamp((introT - 0.7) / 0.26, 0, 1); // scherven schieten weg
-        const revealT = THREE.MathUtils.clamp((introT - 0.68) / 0.12, 0, 1); // merkafbeelding verschijnt
-        const fadeOutT = THREE.MathUtils.clamp((introT - 0.68) / 0.1, 0, 1); // vergrendeling vervaagt
-        const lightT = THREE.MathUtils.clamp((introT - 0.56) / 0.34, 0, 1); // lichtstralen verschijnen
+        const crackT      = THREE.MathUtils.clamp((introT - 0.24) / 0.46, 0, 1); // sneller groeiende barsten
+        const glowT       = THREE.MathUtils.clamp((introT - 0.60) / 0.18, 0, 1); // licht door scheuren
+        const breakT      = THREE.MathUtils.clamp((introT - 0.78) / 0.06, 0, 1); // snellere, krachtigere breuk
+        const flashT      = THREE.MathUtils.clamp((introT - 0.78) / 0.08, 0, 1); // felle flits
+const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
+        const lightT      = THREE.MathUtils.clamp((introT - 0.72) / 0.36, 0, 1);
 
-        // Sla het inslaggeruidje precies op bij het moment dat de scherven wegvliegen.
-        if (breakT > 0.04 && !introSoundPlayed && dropBuffer) {
+        // Geluidje precies bij het breukmoment
+        if (breakT > 0.05 && !introSoundPlayed && dropBuffer) {
           introSoundPlayed = true;
           audioContext?.resume?.();
-          playDropSound(0.08);
+          playDropSound(0.12); // iets harder: dramatischer breukgeluid
         }
 
         if (approachT > 0.03 && !introFlightStarted) {
           introFlightStarted = true;
-          onFocusOverlayChange?.(true); // vignet-overlay aanzetten tijdens de vlucht
+          onFocusOverlayChange?.(true);
         }
 
-        setRevealStageLight(lightT > 0.08 && introT < 0.96);
+        setRevealStageLight(lightT > 0.06 && introT < 0.97);
 
-        // Merkafbeelding (voor-vlak) en achterkant fade in.
-        floatingMaterials[4].opacity = smootherStep(revealT);
+        // Achterkant fade in (branded vlak is altijd op volle opaciteit)
         floatingMaterials[5].opacity = smootherStep(approachT);
 
-        // Vergrendeling vervaagt weg.
+        // Vergrendeling vervaagt weg
         if (lockedPlate) {
           lockedPlate.material.opacity = 1 - smootherStep(fadeOutT);
           lockedPlate.visible = lockedPlate.material.opacity > 0.01;
         }
 
-        // 2D barst-overlay groeit en vervaagt daarna weg.
+        // Gloed-waarde voor shard-shader en crack-textuur (goud door scheuren)
+        const glowAmt = smootherStep(glowT) * (1 - smootherStep(THREE.MathUtils.clamp(breakT * 3, 0, 1)));
+
+        // 2D barst-overlay met gouden gloed door de scheuren
         if (crackOverlay) {
-          const ot = smootherStep(crackT);
-          crackOverlay.material.opacity =
-            ot *
-            Math.max(
-              0,
-              1 -
-                smootherStep(
-                  THREE.MathUtils.clamp((introT - 0.74) / 0.14, 0, 1),
-                ),
-            );
-          crackOverlay.visible = crackOverlay.material.opacity > 0.01;
-          crackOverlay.scale.setScalar(0.04 + ot * 1.04);
+          const ot      = smootherStep(crackT);
+          crackMask.update(ot, glowAmt);
+          // Overlay wordt snel onzichtbaar zodra de scherven exploderen
+          const breakFade = Math.max(0, 1 - smootherStep(THREE.MathUtils.clamp(breakT / 0.35, 0, 1)));
+          crackOverlay.material.opacity = (0.18 + ot * 1.05) * breakFade;
+          crackOverlay.visible          = crackOverlay.material.opacity > 0.01;
+          crackOverlay.scale.setScalar(1.0);
         }
 
-        // 3D barst-buizen groeien en verdwijnen na de breuk.
-        crackLines.forEach((line, i) => {
-          const lineT = THREE.MathUtils.clamp(
-            (crackT - i * 0.022) / 0.72,
-            0,
-            1,
-          );
-          const lineE = smootherStep(lineT);
-          line.material.opacity =
-            (0.06 + Math.sin(lineT * Math.PI) * 0.12 + lineE * 0.2) *
-            line.userData.opacityScale *
-            Math.max(
-              0,
-              1 -
-                smootherStep(
-                  THREE.MathUtils.clamp((introT - 0.72) / 0.16, 0, 1),
-                ),
-            );
-          line.scale.setScalar(0.03 + lineE * 1.1);
-          line.visible = line.material.opacity > 0.01;
-        });
+        // Flits-overlay: korte felle flash op het breukmoment
+        if (flashOverlay) {
+          // Piek bij breakT ~0.3, dan snel wegdampen
+          const flashPeak  = Math.sin(THREE.MathUtils.clamp(flashT, 0, 1) * Math.PI);
+          flashOverlay.material.opacity = flashPeak * 0.85;
+          flashOverlay.visible          = flashOverlay.material.opacity > 0.005;
+          // Flash schaal past aan de tegelgrootte aan
+          flashOverlay.scale.set(1.12, 1.12, 1);
+        }
 
-        // Scherven vliegen weg met vertraging per scher naar afstand van het centrum.
+        // Scherven exploderen krachtig naar buiten
         revealShards.forEach((shard, i) => {
-          const localDelay =
-            (i % 9) * 0.009 +
-            Math.hypot(shard.userData.centroidX, shard.userData.centroidY) *
-              0.04;
-          const rawT = Math.max(0, breakT - localDelay);
-          const shardT = THREE.MathUtils.clamp(rawT / 0.34, 0, 1);
-          const shardEase = smootherStep(shardT);
-          const preCrack = Math.sin(elapsed * 32 + i * 0.8) * crackT * 0.012; // kleine trilling voor de breuk
-          const blast = shardEase ** 0.64 + Math.max(0, rawT - 0.09) * 2.75;
-          const flutter = Math.sin(elapsed * 14 + i) * 0.026 * blast; // rondfladderende beweging
-          shard.position.x =
-            shard.userData.baseX +
-            shard.userData.breakX * blast +
-            preCrack +
-            flutter;
-          shard.position.y =
-            shard.userData.baseY +
-            shard.userData.breakY * blast -
-            preCrack * 0.6 +
-            flutter * 0.45;
-          shard.position.z =
-            TILE_DEPTH / 2 + 0.011 + shard.userData.breakZ * blast;
+          // Stagger: buitenste scherven volgen iets later (centrifugaal effect)
+          const delay = (shard.userData.breakDelay ?? 0) + (i % 4) * 0.022;
+          const shatterElapsed = Math.max(0, (introT - 0.78) * introAnimationDuration - delay);
+          const shardT    = THREE.MathUtils.clamp(shatterElapsed / 2.2, 0, 1); // sneller wegvliegen
+          // Kubus-ease voor snelle start, dan uitfaden
+          const shardEase = shardT < 0.5
+            ? 4 * shardT * shardT * shardT
+            : 1 - ((-2 * shardT + 2) ** 3) / 2;
+
+          // Kleine trilling vlak voor de breuk (spanning opbouwen)
+          const preCrack  = Math.sin(elapsed * 38 + i * 1.1) * glowT * 0.018;
+          // Explosieve uitschietbeweging
+          const launch    = shardEase ** 0.72;
+          // Verder doorvliegen + wegzakken na de initiële explosie
+          const exit      = Math.max(0, shatterElapsed - 0.7) * 0.28;
+          const blast     = launch + exit;
+          // Organisch fladderen terwijl de scherf wegvliegt
+          const flutter   = Math.sin(elapsed * 5.8 + i * 1.3) * 0.009 * Math.min(blast, 1.8);
+
+          shard.position.x = shard.userData.baseX + shard.userData.breakX * blast + preCrack + flutter;
+          shard.position.y = shard.userData.baseY + shard.userData.breakY * blast - preCrack * 0.5 + flutter * 0.55;
+          shard.position.z = TILE_DEPTH / 2 + 0.011 + shard.userData.breakZ * launch + shard.userData.exitZ * exit;
           shard.rotation.set(
-            shard.userData.rotX * blast + flutter,
+            shard.userData.rotX * blast + flutter * 1.2,
             shard.userData.rotY * blast,
-            shard.userData.rotZ * blast + preCrack,
+            shard.userData.rotZ * blast + preCrack * 2,
           );
-          shard.material.opacity = Math.max(
-            0,
-            1 - smootherStep(THREE.MathUtils.clamp((introT - 0.9) / 0.1, 0, 1)),
-          );
-          shard.visible = shard.material.opacity > 0.01;
+
+          // Scherven krimpen iets terwijl ze wegvliegen
+          const shrink = 1 - THREE.MathUtils.clamp(exit * 0.22, 0, 0.65);
+          shard.scale.setScalar(shrink);
+
+          // Opaciteit: plotseling verschijnen op breukmoment, dan snel verdwijnen
+          const shardVisible   = shatterElapsed > 0;
+          const shardFadeStart = 0.92;
+          const shardFadeOut   = THREE.MathUtils.clamp((introT - shardFadeStart) / 0.07, 0, 1);
+          const shardOpacity   = shardVisible ? Math.max(0, 1 - smootherStep(shardFadeOut)) : 0;
+          shard.material.uniforms.opacity.value    = shardOpacity;
+          shard.material.uniforms.glowAmount.value = Math.max(0, glowAmt - shardT); // gloed verdwijnt zodra scherf wegvliegt
+          shard.visible = shardOpacity > 0.01;
         });
 
-        // Lichtstralen pulseren en draaien langzaam rond.
+        // Gouden lichtstralen: krachtiger burst bij breuk, dan rustig nagloeiend
+        // Stralen worden als scene-kind bijgehouden; positie/rotatie syncen met floatingTile.
         revealRays.forEach((ray) => {
-          const pulse =
-            Math.sin(lightT * Math.PI + ray.userData.phase) * 0.5 + 0.5;
-          const burst = Math.sin(lightT * Math.PI);
-          ray.material.opacity =
-            lightT > 0 && lightT < 1 ? (0.025 + pulse * 0.065) * burst : 0;
-          ray.scale.set(
-            ray.userData.baseScale * (0.12 + lightT * 0.65),
-            ray.userData.baseScale * (0.32 + lightT * 0.9),
-            1,
+          const burstPeak   = Math.sin(THREE.MathUtils.clamp(lightT * 2.2, 0, Math.PI));
+          const sustainFade = Math.max(0, 1 - smootherStep(THREE.MathUtils.clamp((introT - 0.86) / 0.22, 0, 1)));
+          const pulse       = Math.sin(lightT * Math.PI * 1.4 + ray.userData.phase) * 0.5 + 0.5;
+          const baseOpacity = burstPeak * 0.58 + pulse * sustainFade * 0.22;
+          const rayOpacity  = lightT > 0 ? baseOpacity * sustainFade : 0;
+          ray.material.uniforms.opacity.value = rayOpacity;
+          const scaleT = smootherStep(Math.min(lightT * 1.8, 1));
+          const rW  = ray.userData.rW  * ray.userData.baseScale * (0.12 + scaleT * 0.92);
+          const rLen = ray.userData.rLen * ray.userData.baseScale * (0.18 + scaleT * 1.2);
+          ray.scale.set(rW, rLen, 1);
+          // Positie: midden van de tegel, iets achter het voor-oppervlak
+          ray.position.set(
+            floatingTile.position.x,
+            floatingTile.position.y,
+            floatingTile.position.z - 0.01,
           );
-          ray.rotation.z += delta * (0.05 + ray.userData.phase * 0.012);
-          ray.visible = ray.material.opacity > 0.01;
+          ray.rotation.x = floatingTile.rotation.x;
+          ray.rotation.y = floatingTile.rotation.y;
+          ray.rotation.z = (ray.userData.initRotZ ?? 0) + elapsed * (ray.userData.rotSpeed ?? 0.05);
+          ray.visible = rayOpacity > 0.005;
         });
 
-        // Korte schudbeweging op het moment van breuk.
-        const shakePulse =
-          Math.sin(Math.min(1, breakT) * Math.PI) *
-          Math.max(0, 1 - THREE.MathUtils.clamp((introT - 0.82) / 0.16, 0, 1));
-        revealDustPulse = Math.sin(Math.min(1, breakT) * Math.PI) * 0.42;
+        // Schudbeweging op het breukmoment: snelle hevige shake
+        const shakePulse = Math.sin(THREE.MathUtils.clamp(breakT, 0, 1) * Math.PI)
+          * Math.max(0, 1 - THREE.MathUtils.clamp((introT - 0.86) / 0.10, 0, 1));
+        revealDustPulse  = Math.sin(THREE.MathUtils.clamp(breakT, 0, 1) * Math.PI) * 0.52;
 
         floatingTile.position.set(
-          THREE.MathUtils.lerp(targetX, startX, approachEase) +
-            Math.sin(elapsed * 68) * 0.035 * shakePulse,
-          THREE.MathUtils.lerp(targetY, startY, approachEase) +
-            Math.sin(approachT * Math.PI) * tileHeight * 0.45 +
-            Math.cos(elapsed * 59) * 0.025 * shakePulse,
+          THREE.MathUtils.lerp(targetX, startX, approachEase) + Math.sin(elapsed * 72) * 0.042 * shakePulse,
+          THREE.MathUtils.lerp(targetY, startY, approachEase) + Math.sin(approachT * Math.PI) * tileHeight * 0.45 + Math.cos(elapsed * 63) * 0.032 * shakePulse,
           THREE.MathUtils.lerp(0.07, FREE_TILE_Z, approachEase),
         );
         floatingTile.scale.set(
@@ -1656,24 +1892,45 @@ export default function HeroScene({
         );
         floatingTile.rotation.set(0, Math.sin(approachT * Math.PI) * 0.08, 0);
 
-        // Intro afgerond: ruim alle effectobjecten op.
+        // Intro afgerond: ruim alle effectobjecten op
         if (introProgress >= introDuration) {
           introActive = false;
           introFlightStarted = false;
-          setShowTileDownload(true);
-          setShowUnlockOverlay(true);
+          onIntroComplete?.();
           setRevealStageLight(false);
           floatingMaterials[4].opacity = floatingMaterials[5].opacity = 1;
           if (lockedPlate) lockedPlate.visible = false;
-          [...revealShards, ...revealRays, ...crackLines].forEach((obj) => {
+          if (flashOverlay) { flashOverlay.visible = false; flashOverlay.material.opacity = 0; }
+          revealShards.forEach((obj) => {
             obj.visible = false;
-            obj.material.opacity = 0;
+            obj.material.uniforms.opacity.value = 0;
           });
-          if (crackOverlay) {
-            crackOverlay.visible = false;
-            crackOverlay.material.opacity = 0;
-          }
-          host.style.cursor = pointer.overTile ? "grab" : "pointer";
+          rayFadeStartTime = elapsed; // stralen faden zelfstandig door buiten dit blok
+          if (crackOverlay) { crackOverlay.visible = false; crackOverlay.material.opacity = 0; }
+          host.style.cursor = pointer.overTile ? 'grab' : 'pointer';
+        }
+      }
+
+      // ── Reveal ray fade (loopt door na het einde van de intro) ───────────
+      // rayFadeStartTime wordt gezet zodra introActive false wordt.
+      // De stralen faden over 2.5s uit zodat er nooit een harde cut is.
+      if (rayFadeStartTime >= 0) {
+        const rayElapsed = elapsed - rayFadeStartTime;
+        const rayFade    = Math.max(0, 1 - smootherStep(THREE.MathUtils.clamp(rayElapsed / 2.5, 0, 1)));
+        revealRays.forEach((ray) => {
+          const prevOpacity = ray.material.uniforms.opacity.value;
+          const newOpacity  = prevOpacity * rayFade;
+          ray.material.uniforms.opacity.value = newOpacity;
+          // Blijf positie syncen met de tegel zodat ze nooit buiten beeld zweven
+          ray.position.set(floatingTile.position.x, floatingTile.position.y, floatingTile.position.z - 0.01);
+          ray.rotation.x = floatingTile.rotation.x;
+          ray.rotation.y = floatingTile.rotation.y;
+          ray.rotation.z = (ray.userData.initRotZ ?? 0) + elapsed * (ray.userData.rotSpeed ?? 0.05);
+          ray.visible    = newOpacity > 0.005;
+        });
+        if (rayFade <= 0) {
+          revealRays.forEach((r) => { r.visible = false; r.material.uniforms.opacity.value = 0; });
+          rayFadeStartTime = -1;
         }
       }
 
@@ -1719,39 +1976,17 @@ export default function HeroScene({
 
       // ── Overlay opacity ───────────────────────────────────────────────────
 
-      // In rust: overlay langzaam terug naar de standaardopaciteit.
-      if (!insertionStarted && !inserted && !extracting)
-        overlayOpacity = THREE.MathUtils.damp(
-          overlayOpacity,
-          FOCUS_OVERLAY_OPACITY,
-          5,
-          delta,
-        );
+      // Tijdens unlock-animatie: overlay omhoog naar 0.72. Na afloop zacht naar 0 faden.
+      // externalOverlay stuurt de vignette in andere fasen (gebouw-ingang e.d.).
+      const unlockDimTarget = unlockDimRef.current ? 0.72
+        : externalOverlayRef.current                ? FOCUS_OVERLAY_OPACITY
+        : 0;
 
-      // Als de tegel ingevoegd is: overlay volledig wegdampen (muur is nu vrij te bekijken).
-      if (inserted)
-        overlayOpacity = THREE.MathUtils.damp(overlayOpacity, 0, 5, delta);
+      if (!insertionStarted && !inserted && !extracting) overlayOpacity = THREE.MathUtils.damp(overlayOpacity, unlockDimTarget, 3, delta);
+      if (inserted) overlayOpacity = THREE.MathUtils.damp(overlayOpacity, 0, 5, delta);
 
       overlayMaterial.opacity = overlayOpacity;
-
-      const unlockTarget = showUnlockOverlayRef.current
-        ? UNLOCK_OVERLAY_OPACITY
-        : 0;
-      unlockOverlayOpacity = THREE.MathUtils.damp(
-        unlockOverlayOpacity,
-        unlockTarget,
-        5,
-        delta,
-      );
-      unlockOverlayMaterial.opacity = unlockOverlayOpacity;
-      unlockOverlay.visible =
-        unlockOverlayOpacity > 0.003 && wallEntranceComplete;
-
-      focusOverlay.visible =
-        overlayOpacity > 0.003 &&
-        externalOverlayRef.current &&
-        wallEntranceComplete &&
-        unlockOverlayOpacity < 0.01;
+      focusOverlay.visible    = overlayOpacity > 0.003 && wallEntranceComplete;
 
       // ── Floating tile transform ───────────────────────────────────────────
 
@@ -1800,21 +2035,20 @@ export default function HeroScene({
 
       // Alle materialen van de zwevende tegel vervagen zodra de tegel de muur raakt.
       floatingMaterials.forEach((mat, i) => {
-        if (introActive && (i === 4 || i === 5)) {
-          mat.transparent = true;
-          return;
-        }
-        mat.opacity = inserted
-          ? Math.max(0, 1 - (elapsed - impactTime) * 3.2)
-          : 1;
-        mat.transparent = i === 4 || inserted;
+        if (introActive && (i === 4 || i === 5)) { mat.transparent = true; return; }
+        mat.opacity = inserted ? Math.max(0, 1 - (elapsed - impactTime) * 3.2) : 1;
+        // Alleen transparent als de opaciteit werkelijk < 1 is — bij opacity 1 gaat het
+        // materiaal naar de opaque pass en occludeert het de lichtstralen correct.
+        mat.transparent = mat.opacity < 1;
+        if (i === 4 || i === 5) mat.transparent = mat.opacity < 0.999;
       });
 
       // Snap de ingevoegde toestand als de vlucht zijn eindpunt bereikt.
       if (insertionStarted && !extracting && !inserted && progress >= 1) {
         inserted = true;
         impactTime = elapsed;
-        setShowTileDownload(false);
+        onTileImpact?.();
+        onTileInserted?.();
         currentBrandWallTile.material.opacity = 1; // muurversie van de tegel verschijnt
       }
 
@@ -1907,39 +2141,24 @@ export default function HeroScene({
         }
 
         // Invlieg-animatie: interpoleer van off-screen startpositie naar doelpositie.
-        let ePX = mesh.userData.baseX,
-          ePY = mesh.userData.baseY,
-          eRX = 0,
-          eRY = 0,
-          eRZ = 0;
+        let ePX = mesh.userData.baseX, ePY = mesh.userData.baseY, ePZ = 0, eRX = 0, eRY = 0, eRZ = 0;
         if (!wallEntranceComplete) {
-          const localT = THREE.MathUtils.clamp(
-            (wallEntranceElapsed - mesh.userData.entranceDelay) /
-              mesh.userData.entranceDuration,
-            0,
-            1,
-          );
-          const ease = smootherStep(localT);
-          ePX = THREE.MathUtils.lerp(
-            mesh.userData.fromX ?? mesh.userData.baseX,
-            mesh.userData.baseX,
-            ease,
-          );
-          ePY = THREE.MathUtils.lerp(
-            mesh.userData.fromY ?? mesh.userData.baseY,
-            mesh.userData.baseY,
-            ease,
-          );
-          eRX = (1 - ease) * (row - (TILE_ROWS - 1) / 2) * 0.06; // lichte kanteling van boven/onder
-          eRY = (1 - ease) * (col - (TILE_COLS - 1) / 2) * 0.06; // lichte kanteling van links/rechts
-          eRZ = (1 - ease) * (((i % 3) - 1) * 0.02); // subtiele rolvariatie
+          const localT = THREE.MathUtils.clamp((wallEntranceElapsed - mesh.userData.entranceDelay) / mesh.userData.entranceDuration, 0, 1);
+          const ease   = smootherStep(localT);
+          const floatArc = Math.sin(localT * Math.PI);
+          ePX = THREE.MathUtils.lerp(mesh.userData.fromX ?? mesh.userData.baseX, mesh.userData.baseX, ease);
+          ePY = THREE.MathUtils.lerp(mesh.userData.fromY ?? mesh.userData.baseY, mesh.userData.baseY, ease)
+            + Math.sin(wallEntranceElapsed * 1.65 + i * 0.61) * 0.07 * floatArc;
+          ePZ = floatArc * 0.11;
+          eRX = (1 - ease) * (row - (TILE_ROWS - 1) / 2) * 0.085
+            + Math.sin(wallEntranceElapsed * 1.25 + i * 0.37) * 0.06 * floatArc;
+          eRY = (1 - ease) * (col - (TILE_COLS - 1) / 2) * 0.085
+            + Math.cos(wallEntranceElapsed * 1.18 + i * 0.29) * 0.055 * floatArc;
+          eRZ = (1 - ease) * ((i % 3 - 1) * 0.04)
+            + Math.sin(wallEntranceElapsed * 1.5 + i * 0.43) * 0.035 * floatArc;
         }
 
-        mesh.position.set(
-          ePX + radialX * wave * damp * 0.24 + tremor * 0.075,
-          ePY - radialY * wave * damp * 0.24 + tremor * 0.012,
-          wave * damp * 0.14 + hover * 0.04,
-        );
+        mesh.position.set(ePX + radialX * wave * damp * 0.24 + tremor * 0.075, ePY - radialY * wave * damp * 0.24 + tremor * 0.012, ePZ + wave * damp * 0.14 + hover * 0.04);
         mesh.scale.set(tileWidth, tileHeight, 1);
         mesh.material.opacity = 1;
         mesh.material.transparent =
@@ -2060,57 +2279,15 @@ export default function HeroScene({
       setRevealStageLight(false);
 
       renderer.dispose();
-      [
-        tileGeometry,
-        floatingTileGeometry,
-        overlayGeometry,
-        particleGeometry,
-        shockwave.geometry,
-        idleGlow.geometry,
-      ].forEach((g) => g.dispose());
-      [
-        particleMaterial,
-        shockwaveMaterial,
-        idleGlowMaterial,
-        overlayMaterial,
-        unlockOverlayMaterial,
-      ].forEach((m) => m.dispose());
-      if (lockedPlate) lockedPlate.material.dispose();
+      [tileGeometry, floatingTileGeometry, overlayGeometry, particleGeometry, shockwave.geometry, idleGlow.geometry].forEach((g) => g.dispose());
+      [particleMaterial, shockwaveMaterial, idleGlowMaterial, overlayMaterial, flashOverlayMaterial].forEach((m) => m.dispose());
+      rotRingGroup.children.forEach((c) => { if (c.geometry) c.geometry.dispose(); }); rotMatArc.dispose(); rotMatCone.dispose();
+      if (lockedPlate)  lockedPlate.material.dispose();
       if (crackOverlay) crackOverlay.material.dispose();
-      revealShards.forEach((s) => {
-        s.geometry.dispose();
-        s.material.dispose();
-      });
-      revealRays.forEach((r) => {
-        r.geometry.dispose();
-        r.material.dispose();
-      });
-      crackLines.forEach((l) => {
-        l.geometry.dispose();
-        l.material.dispose();
-      });
-      [
-        emptyTexture,
-        currentBrandTexture,
-        tileBackTexture,
-        ceramicEdgeTexture,
-        ritualsTexture,
-        burgerkingTexture,
-        lockedTexture,
-        crackTexture,
-      ].forEach((t) => t.dispose());
-      [
-        emptyMaterial,
-        blankMaterial,
-        ritualsMaterial,
-        burgerkingMaterial,
-        currentBrandMaterial,
-        tileBackMaterial,
-        ceramicSideMaterial,
-        lockedMaterial,
-        revealLightMaterial,
-        crackOverlayMaterial,
-      ].forEach((m) => m.dispose());
+      revealShards.forEach((s) => { s.geometry.dispose(); s.material.dispose(); });
+      revealRays.forEach((r)   => { r.geometry.dispose(); r.material.dispose(); });
+      [emptyTexture, currentBrandTexture, tileBackTexture, ceramicEdgeTexture, ritualsTexture, burgerkingTexture, lockedTexture, crackTexture].forEach((t) => t.dispose());
+      [emptyMaterial, blankMaterial, ritualsMaterial, burgerkingMaterial, currentBrandMaterial, tileBackMaterial, ceramicSideMaterial, lockedMaterial, revealLightMaterial, crackOverlayMaterial].forEach((m) => m.dispose());
       currentBrandWallTile.material.dispose();
       floatingMaterials.forEach((m) => m.dispose());
       if (host.contains(renderer.domElement))
