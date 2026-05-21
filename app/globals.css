@@ -63,6 +63,21 @@ button {
   background: #eef6ff;
 }
 
+.livewall-stage-unlocking .livewall-room,
+.livewall-stage-unlocking .room-decor-models,
+.livewall-stage-unlocking .livewall-logo,
+.livewall-stage-unlocking .livewall-title {
+  filter: brightness(0.28);
+  transition: filter 1.4s ease;
+}
+
+.livewall-stage .livewall-room,
+.livewall-stage .room-decor-models,
+.livewall-stage .livewall-logo,
+.livewall-stage .livewall-title {
+  transition: filter 1.4s ease;
+}
+
 .livewall-room {
   position: absolute;
   inset: 0;
@@ -72,11 +87,37 @@ button {
   pointer-events: none;
 }
 
+.room-decor-models {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  background: transparent;
+  isolation: isolate;
+  transition: opacity 420ms ease;
+}
+
+.room-decor-models-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.room-decor-models canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  background: transparent !important;
+}
+
 .livewall-title {
   position: absolute;
   left: 50%;
   top: 12.61%;
-  z-index: 4;
+  z-index: 7;
   transform: translate(-50%, -50%);
   color: rgba(23, 89, 187, 0.72);
   font-family: "Playfair Display", Georgia, serif;
@@ -89,11 +130,30 @@ button {
   pointer-events: none;
 }
 
+.tile-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 6.5%;
+  z-index: 100;
+  transform: translateX(-50%);
+  color: rgba(23, 89, 187, 0.62);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(10px, 1.35vw, 19px);
+  font-style: italic;
+  letter-spacing: 0.04em;
+  text-align: center;
+  white-space: normal;
+  max-width: 60vw;
+  pointer-events: none;
+  visibility: hidden;
+  perspective: 400px;
+}
+
 .livewall-logo {
   position: absolute;
   left: 42.01%;
   top: 69.56%;
-  z-index: 4;
+  z-index: 7;
   width: 16.18%;
   height: 7.56%;
   object-fit: contain;
