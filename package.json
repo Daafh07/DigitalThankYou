@@ -12,13 +12,15 @@
     "@react-three/drei": "^10.0.6",
     "@react-three/fiber": "^9.0.4",
     "@react-three/postprocessing": "^3.0.4",
+    "framer-motion": "^12.40.0",
     "gsap": "^3.12.7",
     "lucide-react": "^1.16.0",
     "next": "^15.2.3",
     "postprocessing": "^6.36.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "three": "^0.174.0"
+    "three": "^0.174.0",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",
