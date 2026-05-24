@@ -7,6 +7,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, Send, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import TilePreview3D from '@/components/generated/tile-preview-3d';
 import { generateTileFromPrompt } from '@/lib/ai/lm-studio';
 import { useGeneratedTilesStore } from '@/store/generated-tiles-store';
 
@@ -21,6 +22,7 @@ export default function AiChat({ isOpen, onClose }) {
   const addTile = useGeneratedTilesStore((s) => s.addTile);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [previewText, setPreviewText] = useState(/** @type {string | null} */ (null));
   const [messages, setMessages] = useState(
     /** @type {ChatEntry[]} */ ([
       {
@@ -40,6 +42,8 @@ export default function AiChat({ isOpen, onClose }) {
       const timer = setTimeout(() => inputRef.current?.focus(), 280);
       return () => clearTimeout(timer);
     }
+    setPreviewText(null);
+    return undefined;
   }, [isOpen]);
 
   useEffect(() => {
@@ -63,6 +67,7 @@ export default function AiChat({ isOpen, onClose }) {
 
       setMessages((prev) => [...prev, userMessage]);
       setInput('');
+      setPreviewText(prompt);
       setIsLoading(true);
 
       try {
@@ -126,11 +131,11 @@ export default function AiChat({ isOpen, onClose }) {
             exit={{ opacity: 0, y: 24, scale: 0.97 }}
             transition={{ type: 'spring', stiffness: 380, damping: 32 }}
             className={[
-              'fixed bottom-24 right-6 z-50 flex w-[min(420px,calc(100vw-2rem))] flex-col',
+              'fixed bottom-24 right-6 z-50 flex w-[min(440px,calc(100vw-2rem))] flex-col',
               'overflow-hidden rounded-2xl border border-white/15',
               'bg-slate-900/85 shadow-2xl backdrop-blur-2xl',
             ].join(' ')}
-            style={{ maxHeight: 'min(560px, calc(100vh - 7rem))' }}
+            style={{ maxHeight: 'min(680px, calc(100vh - 6rem))' }}
           >
             {/* Header */}
             <motion.div
@@ -162,6 +167,16 @@ export default function AiChat({ isOpen, onClose }) {
                 <X size={16} />
               </button>
             </motion.div>
+
+            {previewText && (
+              <div className="shrink-0 space-y-2 border-b border-white/10 px-4 py-4">
+                <p className="text-xs font-medium text-white/50">Voorbeeld tegel</p>
+                <TilePreview3D
+                  frontText={previewText}
+                  isGenerating={isLoading}
+                />
+              </div>
+            )}
 
             {/* Messages */}
             <div
