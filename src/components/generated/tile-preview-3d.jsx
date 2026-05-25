@@ -1,14 +1,18 @@
 "use client";
 
 /**
- * TilePreview3D — interactieve 3D-tegelpreview tijdens en na AI-generatie.
- * Voorkant: ingevoerde tekst. Achterkant: standaard bedankteksten.
+ * TilePreview3D — interactieve 3D-tegelpreview.
+ * Met logo: voorvlak uit emptytile.svg + Delft-blauw logo.
  */
 
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useLoader, useThree } from "@react-three/fiber";
-import { Suspense, useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
+import {
+  createTileFrontTextureFromDataUrl,
+  createTileFrontTextureWithLogo,
+} from "@/lib/tile-front-composite";
 import {
   createTileBackTexture,
   createTileFrontTexture,
@@ -17,19 +21,79 @@ import {
 const TILE_DEPTH = 0.1;
 const TILE_ASPECT = 79 / 82;
 const CERAMIC_EDGE_TEXTURE = "/assets/textures/keramiek.jpg";
+const PLACEHOLDER_COLOR = "#fff8ee";
 
 /**
- * @param {{ frontText: string; isGenerating?: boolean }} props
+ * @param {{
+ *   frontText?: string;
+ *   logoBlueDataUrl?: string | null;
+ *   tileFrontDataUrl?: string | null;
+ *   isGenerating?: boolean;
+ * }} props
  */
-function TilePreviewMesh({ frontText, isGenerating = false }) {
+function TilePreviewMesh({
+  frontText = "",
+  logoBlueDataUrl = null,
+  tileFrontDataUrl = null,
+  isGenerating = false,
+}) {
   const { gl } = useThree();
+  const [composedFrontMap, setComposedFrontMap] = useState(
+    /** @type {THREE.CanvasTexture | null} */ (null),
+  );
 
   const sideMap = useLoader(THREE.TextureLoader, CERAMIC_EDGE_TEXTURE);
-  const frontMap = useMemo(
-    () => createTileFrontTexture(frontText, gl),
-    [frontText, gl],
+  const useComposedFront = Boolean(tileFrontDataUrl || logoBlueDataUrl);
+
+  const textFrontMap = useMemo(
+    () =>
+      useComposedFront ? null : createTileFrontTexture(frontText, gl),
+    [frontText, gl, useComposedFront],
   );
   const backMap = useMemo(() => createTileBackTexture(gl), [gl]);
+
+  const placeholderMaterial = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        color: PLACEHOLDER_COLOR,
+        toneMapped: false,
+      }),
+    [],
+  );
+
+  useEffect(() => {
+    if (!useComposedFront) {
+      setComposedFrontMap(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    let texture = /** @type {THREE.CanvasTexture | null} */ (null);
+
+    const loader = tileFrontDataUrl
+      ? createTileFrontTextureFromDataUrl(tileFrontDataUrl, gl)
+      : createTileFrontTextureWithLogo(logoBlueDataUrl, gl);
+
+    loader
+      .then((map) => {
+        if (cancelled) {
+          map.dispose();
+          return;
+        }
+        texture = map;
+        setComposedFrontMap(map);
+      })
+      .catch(() => {
+        if (!cancelled) setComposedFrontMap(null);
+      });
+
+    return () => {
+      cancelled = true;
+      texture?.dispose();
+    };
+  }, [tileFrontDataUrl, logoBlueDataUrl, gl, useComposedFront]);
+
+  const frontMap = useComposedFront ? composedFrontMap : textFrontMap;
 
   useEffect(() => {
     configureSide(sideMap, gl);
@@ -37,10 +101,11 @@ function TilePreviewMesh({ frontText, isGenerating = false }) {
 
   useEffect(
     () => () => {
-      frontMap.dispose();
+      textFrontMap?.dispose();
+      composedFrontMap?.dispose();
       backMap.dispose();
     },
-    [frontMap, backMap],
+    [textFrontMap, composedFrontMap, backMap],
   );
 
   const sideMaterial = useMemo(
@@ -53,15 +118,14 @@ function TilePreviewMesh({ frontText, isGenerating = false }) {
     [sideMap],
   );
 
-  const frontMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        color: "#ffffff",
-        map: frontMap,
-        toneMapped: false,
-      }),
-    [frontMap],
-  );
+  const frontMaterial = useMemo(() => {
+    if (!frontMap) return placeholderMaterial;
+    return new THREE.MeshBasicMaterial({
+      color: "#ffffff",
+      map: frontMap,
+      toneMapped: false,
+    });
+  }, [frontMap, placeholderMaterial]);
 
   const backMaterial = useMemo(
     () =>
@@ -95,7 +159,7 @@ function TilePreviewMesh({ frontText, isGenerating = false }) {
         enableZoom
         minDistance={1.4}
         maxDistance={4}
-        autoRotate={isGenerating}
+        autoRotate={isGenerating || (useComposedFront && !composedFrontMap)}
         autoRotateSpeed={1.4}
         minPolarAngle={Math.PI * 0.22}
         maxPolarAngle={Math.PI * 0.78}
@@ -120,13 +184,27 @@ function configureSide(texture, renderer) {
 }
 
 /**
- * @param {{ frontText: string; isGenerating?: boolean; className?: string }} props
+ * @param {{
+ *   frontText?: string;
+ *   logoBlueDataUrl?: string | null;
+ *   tileFrontDataUrl?: string | null;
+ *   isGenerating?: boolean;
+ *   className?: string;
+ * }} props
  */
 export default function TilePreview3D({
-  frontText,
+  frontText = "",
+  logoBlueDataUrl = null,
+  tileFrontDataUrl = null,
   isGenerating = false,
   className = "",
 }) {
+  const showPreview = Boolean(
+    tileFrontDataUrl || logoBlueDataUrl || frontText.trim(),
+  );
+
+  if (!showPreview) return null;
+
   return (
     <div
       className={[
@@ -143,6 +221,8 @@ export default function TilePreview3D({
           <Suspense fallback={null}>
             <TilePreviewMesh
               frontText={frontText}
+              logoBlueDataUrl={logoBlueDataUrl}
+              tileFrontDataUrl={tileFrontDataUrl}
               isGenerating={isGenerating}
             />
           </Suspense>

@@ -113,17 +113,23 @@ export default function GeneratedTile({ tile, index = 0 }) {
         <X size={14} />
       </button>
 
-      {/* Afbeelding */}
-      {tile.image && (
+      {/* Tegelvoorvlak of afbeelding */}
+      {(tile.tileTexture || tile.image) && (
         <motion.div
-          className="relative h-36 w-full shrink-0 overflow-hidden"
+          className={[
+            'relative w-full shrink-0 overflow-hidden',
+            tile.tileTexture ? 'h-44 bg-[#fff8ee]' : 'h-36',
+          ].join(' ')}
           whileHover={{ scale: 1.03 }}
           transition={{ duration: 0.35 }}
         >
           <img
-            src={tile.image}
+            src={tile.tileTexture ?? tile.image}
             alt={tile.title}
-            className="h-full w-full object-cover"
+            className={[
+              'h-full w-full',
+              tile.tileTexture ? 'object-contain p-3' : 'object-cover',
+            ].join(' ')}
             onError={(e) => {
               e.currentTarget.style.display = 'none';
             }}

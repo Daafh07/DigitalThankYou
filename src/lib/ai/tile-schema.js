@@ -21,6 +21,8 @@
  * @property {string} [subtitle]
  * @property {string} [description]
  * @property {string} [image]
+ * @property {string} [logoBlue] — geüpload logo in Delft-blauw (data URL)
+ * @property {string} [tileTexture] — samengesteld voorvlak (emptytile + logo)
  * @property {string} [buttonText]
  * @property {TileStyle} [style]
  * @property {number} createdAt
@@ -53,7 +55,11 @@ Regels:
 - title is altijd verplicht en beschrijvend.
 - Kies style.theme, style.accent en style.size passend bij de gebruikersprompt.
 - Gebruik bestaande asset-paden indien een afbeelding nodig is: /assets/figma/livewall-room.png, /assets/figma/newLogo.svg, /assets/figma/interstitial-building.png
+- Als de gebruiker een logo heeft geüpload: focus op titel en beschrijving; het logo staat al op de tegel in Delft-blauw.
 - Schrijf in het Nederlands tenzij de gebruiker een andere taal vraagt.`;
+
+const LOGO_TILE_USER_PREFIX =
+  "De gebruiker heeft een logo geüpload dat al in Delft-blauw op de tegel staat. ";
 
 /**
  * Extraheert JSON uit ruwe LLM-output (ondersteunt markdown code fences).
@@ -129,6 +135,12 @@ export function normalizeTilePayload(raw) {
         ? data.description.trim()
         : undefined,
     image: typeof data.image === "string" ? data.image.trim() : undefined,
+    logoBlue:
+      typeof data.logoBlue === "string" ? data.logoBlue.trim() : undefined,
+    tileTexture:
+      typeof data.tileTexture === "string"
+        ? data.tileTexture.trim()
+        : undefined,
     buttonText:
       typeof data.buttonText === "string" ? data.buttonText.trim() : undefined,
     style: { theme, accent, size },
@@ -143,4 +155,52 @@ export function parseTileFromAiResponse(raw) {
   const extracted =
     typeof raw === "string" ? extractJsonFromResponse(raw) : raw;
   return normalizeTilePayload(extracted);
+}
+
+/**
+ * Bouwt de gebruikersprompt voor de LLM wanneer er een logo is geüpload.
+ * @param {string} userPrompt
+ * @param {boolean} hasLogo
+ * @returns {string}
+ */
+export function buildTileUserPrompt(userPrompt, hasLogo) {
+  const trimmed = userPrompt.trim();
+  if (!hasLogo) return trimmed;
+  if (!trimmed) {
+    return `${LOGO_TILE_USER_PREFIX}Maak een passende titel en korte beschrijving voor deze partner-tegel.`;
+  }
+  return `${LOGO_TILE_USER_PREFIX}${trimmed}`;
+}
+
+/**
+ * Voegt logo-velden toe aan een genormaliseerde tile na AI-parsing.
+ * @param {Omit<GeneratedTileData, 'id' | 'createdAt'>} payload
+ * @param {{ logoBlue?: string; tileTexture?: string }} assets
+ */
+export function attachLogoAssetsToTile(payload, assets) {
+  if (assets.logoBlue) payload.logoBlue = assets.logoBlue;
+  if (assets.tileTexture) {
+    payload.tileTexture = assets.tileTexture;
+    payload.image = assets.tileTexture;
+  }
+}
+
+/**
+ * Fallback-tegel wanneer LM Studio niet bereikbaar is maar wel een logo is geüpload.
+ * @param {{ prompt?: string; fileName?: string }} options
+ * @returns {Omit<GeneratedTileData, 'id' | 'createdAt'>}
+ */
+export function createLogoTileFallback({ prompt = '', fileName = '' } = {}) {
+  const trimmed = prompt.trim();
+  const fromFile = fileName.replace(/\.[^.]+$/, '').trim();
+  const title = trimmed || fromFile || 'Partner tegel';
+
+  return normalizeTilePayload({
+    title: title.length > 48 ? `${title.slice(0, 45)}…` : title,
+    subtitle: 'Digital Thank You',
+    description: trimmed
+      ? undefined
+      : 'Bedankt voor jullie partnership — jullie staan op de muur.',
+    style: { theme: 'dark', accent: 'blue', size: 'medium' },
+  });
 }

@@ -6,8 +6,13 @@
 
 import { motion } from 'framer-motion';
 import { Plus } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useState } from 'react';
-import AiChat from './ai-chat';
+
+const AiChat = dynamic(() => import('./ai-chat'), {
+  ssr: false,
+  loading: () => null,
+});
 
 export default function NewTileButton() {
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -35,7 +40,9 @@ export default function NewTileButton() {
         <span className="text-sm font-semibold tracking-wide">Nieuwe tegel</span>
       </motion.button>
 
-      <AiChat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      {isChatOpen && (
+        <AiChat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      )}
     </>
   );
 }

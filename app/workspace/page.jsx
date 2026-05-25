@@ -14,10 +14,10 @@ export default function WorkspacePage() {
   const tiles = useGeneratedTilesStore((s) => s.tiles);
 
   return (
-    <div className="fixed inset-0 overflow-x-hidden overflow-y-auto bg-[#f7fbff]">
+    <div className="relative min-h-screen overflow-x-hidden bg-[#f7fbff] pb-28">
       <div
         aria-hidden
-        className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(23,89,187,0.08)_0%,_transparent_60%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(23,89,187,0.08)_0%,_transparent_60%)]"
       />
 
       <div className="relative mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
