@@ -1,22 +1,22 @@
-'use client';
+"use client";
 
 /**
  * TilePreview3D — interactieve 3D-tegelpreview tijdens en na AI-generatie.
  * Voorkant: ingevoerde tekst. Achterkant: standaard bedankteksten.
  */
 
-import { OrbitControls } from '@react-three/drei';
-import { Canvas, useLoader, useThree } from '@react-three/fiber';
-import { Suspense, useEffect, useMemo } from 'react';
-import * as THREE from 'three';
+import { OrbitControls } from "@react-three/drei";
+import { Canvas, useLoader, useThree } from "@react-three/fiber";
+import { Suspense, useEffect, useMemo } from "react";
+import * as THREE from "three";
 import {
   createTileBackTexture,
   createTileFrontTexture,
-} from '@/lib/tile-preview-textures';
+} from "@/lib/tile-preview-textures";
 
 const TILE_DEPTH = 0.1;
 const TILE_ASPECT = 79 / 82;
-const CERAMIC_EDGE_TEXTURE = '/assets/textures/keramiek.jpg';
+const CERAMIC_EDGE_TEXTURE = "/assets/textures/keramiek.jpg";
 
 /**
  * @param {{ frontText: string; isGenerating?: boolean }} props
@@ -46,7 +46,7 @@ function TilePreviewMesh({ frontText, isGenerating = false }) {
   const sideMaterial = useMemo(
     () =>
       new THREE.MeshBasicMaterial({
-        color: '#ffffff',
+        color: "#ffffff",
         map: sideMap,
         toneMapped: false,
       }),
@@ -56,7 +56,7 @@ function TilePreviewMesh({ frontText, isGenerating = false }) {
   const frontMaterial = useMemo(
     () =>
       new THREE.MeshBasicMaterial({
-        color: '#ffffff',
+        color: "#ffffff",
         map: frontMap,
         toneMapped: false,
       }),
@@ -66,7 +66,7 @@ function TilePreviewMesh({ frontText, isGenerating = false }) {
   const backMaterial = useMemo(
     () =>
       new THREE.MeshBasicMaterial({
-        color: '#ffffff',
+        color: "#ffffff",
         map: backMap,
         toneMapped: false,
       }),
@@ -92,7 +92,9 @@ function TilePreviewMesh({ frontText, isGenerating = false }) {
       </mesh>
       <OrbitControls
         enablePan={false}
-        enableZoom={false}
+        enableZoom
+        minDistance={1.4}
+        maxDistance={4}
         autoRotate={isGenerating}
         autoRotateSpeed={1.4}
         minPolarAngle={Math.PI * 0.22}
@@ -123,20 +125,20 @@ function configureSide(texture, renderer) {
 export default function TilePreview3D({
   frontText,
   isGenerating = false,
-  className = '',
+  className = "",
 }) {
   return (
     <div
       className={[
-        'relative overflow-hidden rounded-xl border border-white/10 bg-[#0a1628]/60',
+        "relative overflow-hidden rounded-xl border border-white/10 bg-[#0a1628]/60",
         className,
-      ].join(' ')}
+      ].join(" ")}
     >
       <div className="h-[200px] w-full">
         <Canvas
-          camera={{ position: [0, 0, 2.35], fov: 42 }}
+          camera={{ position: [0, 0, 2.35], fov: 42, near: 0.1, far: 100 }}
           gl={{ alpha: true, antialias: true }}
-          style={{ background: 'transparent' }}
+          style={{ background: "transparent" }}
         >
           <Suspense fallback={null}>
             <TilePreviewMesh
