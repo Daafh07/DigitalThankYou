@@ -696,6 +696,7 @@ export default function HeroScene({
       if (i === CURRENT_BRAND_INDEX - 1) mat = ritualsMaterial; // linker buurmerk
       if (i === CURRENT_BRAND_INDEX + 1) mat = burgerkingMaterial; // rechter buurmerk
       const mesh = new THREE.Mesh(tileGeometry, mat);
+      mesh.visible = false;
       wallGroup.add(mesh);
       tiles.push(mesh);
     }
@@ -753,6 +754,45 @@ export default function HeroScene({
     floatingTile.visible = false;
     scene.add(floatingTile);
     floatingTileRef.current = floatingTile;
+
+    // ── Inspected wall tile (3D doos voor tegels die uit de muur komen) ─────
+
+    const inspectedTileMaterials = [
+      ceramicSideMaterial.clone(),
+      ceramicSideMaterial.clone(),
+      ceramicSideMaterial.clone(),
+      ceramicSideMaterial.clone(),
+      emptyMaterial.clone(),
+      emptyMaterial.clone(),
+    ];
+    inspectedTileMaterials.forEach((m) => {
+      m.transparent = true;
+      m.opacity = 1;
+      m.toneMapped = false;
+    });
+
+    const inspectedTile = new THREE.Mesh(floatingTileGeometry, inspectedTileMaterials);
+    inspectedTile.visible = false;
+    inspectedTile.renderOrder = 11;
+    inspectedTile.position.set(0, 0, 2.65);
+    scene.add(inspectedTile);
+
+    const setInspectedTileFace = (index) => {
+      const sourceMaterial = tiles[index]?.material || emptyMaterial;
+      const frontMaterial = inspectedTileMaterials[4];
+      frontMaterial.map = sourceMaterial.map || null;
+      frontMaterial.color.copy(sourceMaterial.color || new THREE.Color("#ffffff"));
+      frontMaterial.opacity = 1;
+      frontMaterial.transparent = false;
+      frontMaterial.needsUpdate = true;
+
+      const backMaterial = inspectedTileMaterials[5];
+      backMaterial.map = emptyTexture;
+      backMaterial.color.set("#ffffff");
+      backMaterial.opacity = 1;
+      backMaterial.transparent = false;
+      backMaterial.needsUpdate = true;
+    };
 
     // ── Idle glow (gouden halo achter de vergrendelde tegel) ──────────────────
 
@@ -1187,8 +1227,16 @@ export default function HeroScene({
     const hoverWorld = { x: 0, y: 0 };
     const targetRotation = { x: 0, y: 0 };
     const dragState    = { active: false, moved: false, lastX: 0, lastY: 0, rotationX: 0, rotationY: 0 };
+    const inspectedDragState = { active: false, moved: false, suppressClick: false, lastX: 0, lastY: 0, rotationX: -0.08, rotationY: 0.14 };
     let userHasRotated = false; // blijft true zodra gebruiker ooit de tegel gedraaid heeft
     let hoveredWallTileIndex = -1;
+    let inspectedWallTileIndex = -1;
+    let inspectedTileClosing = false;
+    let inspectedTileOpenProgress = 0;  // 0 = in muur, 1 = volledig naar voren
+    let inspectedTileCloseProgress = 0;
+    let inspectedTileOriginX = 0;       // world-positie van de brontegel
+    let inspectedTileOriginY = 0;
+    let inspectedTileOriginIndex = -1;  // welke muurtegel verborgen is
 
     // Bijhouden welke tegels hun ripple-geluid al afgespeeld hebben na de inslag.
     const droppedTileSounds = new Set();
@@ -1340,7 +1388,13 @@ export default function HeroScene({
               ? -viewHeight / 2 - margin
               : edgeT * viewHeight * 0.5;
 
-        mesh.position.set(x, y, 0);
+        const entrancePending =
+          !wallEntranceComplete && !wallEntranceActive && !inserted;
+        mesh.position.set(
+          entrancePending ? mesh.userData.fromX : x,
+          entrancePending ? mesh.userData.fromY : y,
+          0,
+        );
         mesh.scale.set(tileWidth, tileHeight, 1);
 
         if (i === CURRENT_BRAND_INDEX) {
@@ -1425,12 +1479,28 @@ export default function HeroScene({
       const world = clientToWorld(e);
 
       if (inserted) {
+        if (inspectedDragState.active && inspectedWallTileIndex >= 0) {
+          const dx = e.clientX - inspectedDragState.lastX;
+          const dy = e.clientY - inspectedDragState.lastY;
+          inspectedDragState.lastX = e.clientX;
+          inspectedDragState.lastY = e.clientY;
+          if (Math.abs(dx) + Math.abs(dy) > 2) inspectedDragState.moved = true;
+          inspectedDragState.rotationY += dx * 0.012;
+          inspectedDragState.rotationX += dy * 0.01;
+          host.style.cursor = "grabbing";
+          return;
+        }
+
         // Na invoeging: hover-tegel bijhouden voor het ripple-hover-effect op de muur.
         hoverWorld.x = world.x;
         hoverWorld.y = world.y;
         hoveredWallTileIndex = getWallTileIndex(world);
         host.style.cursor =
-          hoveredWallTileIndex === CURRENT_BRAND_INDEX ? "pointer" : "default";
+          inspectedWallTileIndex >= 0 && hoveredWallTileIndex === inspectedWallTileIndex
+            ? "grab"
+            : hoveredWallTileIndex >= 0
+              ? "pointer"
+              : "default";
         return;
       }
 
@@ -1485,6 +1555,24 @@ export default function HeroScene({
 
     // Start het slepen als de gebruiker op de zwevende tegel drukt.
     const handlePointerDown = (e) => {
+      if (inserted && inspectedWallTileIndex >= 0) {
+        const world = clientToWorld(e);
+        const hw = Math.max(tileWidth * 3.15, inspectedTile.scale.x) / 2;
+        const hh = Math.max(tileHeight * 3.15, inspectedTile.scale.y) / 2;
+        if (
+          Math.abs(world.x - inspectedTile.position.x) <= hw &&
+          Math.abs(world.y - inspectedTile.position.y) <= hh
+        ) {
+          inspectedDragState.active = true;
+          inspectedDragState.moved = false;
+          inspectedDragState.lastX = e.clientX;
+          inspectedDragState.lastY = e.clientY;
+          host.setPointerCapture?.(e.pointerId);
+          host.style.cursor = "grabbing";
+        }
+        return;
+      }
+
       if (introActive || insertionStarted || inserted || extracting) return;
       const world = clientToWorld(e);
       if (!isInsideFloatingTile(world)) return;
@@ -1498,6 +1586,14 @@ export default function HeroScene({
 
     // Stop het slepen bij loslaten; sla de huidige rotatie op als startpunt.
     const handlePointerUp = (e) => {
+      if (inspectedDragState.active) {
+        inspectedDragState.active = false;
+        inspectedDragState.suppressClick = inspectedDragState.moved;
+        host.releasePointerCapture?.(e.pointerId);
+        host.style.cursor = inspectedWallTileIndex >= 0 ? "grab" : "pointer";
+        return;
+      }
+
       if (!dragState.active) return;
       dragState.active = false;
       dragState.rotationX = floatingTile.rotation.x;
@@ -1509,6 +1605,7 @@ export default function HeroScene({
     // Reset hover-staat als de cursor het host-element verlaat.
     const handlePointerLeave = () => {
       if (dragState.active) return;
+      inspectedDragState.active = false;
       hoveredWallTileIndex = -1;
       pointer.overTile = false;
       targetRotation.x = dragState.rotationX;
@@ -1518,6 +1615,11 @@ export default function HeroScene({
 
     const handleClick = (e) => {
       if (e.target.closest("[data-tile-download]")) return;
+      if (inspectedDragState.active) return;
+      if (inspectedDragState.suppressClick) {
+        inspectedDragState.suppressClick = false;
+        return;
+      }
 
       const world = clientToWorld(e);
 
@@ -1538,8 +1640,56 @@ export default function HeroScene({
       if (extracting) return;
 
       if (inserted) {
+        const clickedWallTileIndex = getWallTileIndex(world);
+
+        if (clickedWallTileIndex >= 0 && clickedWallTileIndex !== CURRENT_BRAND_INDEX) {
+          if (inspectedWallTileIndex >= 0) {
+            // Een tegel is al geïnspecteerd: sluit hem, open geen andere.
+            inspectedTileClosing = true;
+            inspectedTileCloseProgress = 1 - inspectedTileOpenProgress;
+            inspectedDragState.active = false;
+            hoveredWallTileIndex = -1;
+            inspectedWallTileIndex = -1;
+          } else {
+            const wallMesh = tiles[clickedWallTileIndex];
+            inspectedTileOriginX = wallMesh ? wallMesh.userData.baseX : 0;
+            inspectedTileOriginY = wallMesh ? wallMesh.userData.baseY : 0;
+            inspectedTileOriginIndex = clickedWallTileIndex;
+            inspectedTileOpenProgress = 0;
+            inspectedTileClosing = false;
+            inspectedWallTileIndex = clickedWallTileIndex;
+            inspectedDragState.active = false;
+            inspectedDragState.moved = false;
+            inspectedDragState.suppressClick = false;
+            inspectedDragState.rotationX = 0;
+            inspectedDragState.rotationY = 0;
+            setInspectedTileFace(clickedWallTileIndex);
+            // Snap de inspectedTile naar de muurtegel-positie zodat hij van daar begint
+            inspectedTile.position.set(inspectedTileOriginX, inspectedTileOriginY, 0.07);
+            inspectedTile.scale.set(tileWidth, tileHeight, 1);
+            inspectedTile.rotation.set(0, 0, 0);
+            inspectedTileMaterials.forEach((m) => { m.opacity = 1; });
+            inspectedTile.visible = true;
+          }
+          hoveredWallTileIndex = clickedWallTileIndex;
+          host.style.cursor = "pointer";
+          return;
+        }
+
+        if (clickedWallTileIndex === -1) {
+          if (inspectedWallTileIndex >= 0) {
+            inspectedTileClosing = true;
+            inspectedTileCloseProgress = 1 - inspectedTileOpenProgress;
+          }
+          inspectedWallTileIndex = -1;
+          inspectedDragState.active = false;
+          hoveredWallTileIndex = -1;
+          return;
+        }
+
         // Gebruiker klikt de ingevoegde tegel aan om hem terug te trekken.
-        if (getWallTileIndex(world) !== CURRENT_BRAND_INDEX) return;
+        if (clickedWallTileIndex !== CURRENT_BRAND_INDEX) return;
+        inspectedWallTileIndex = -1;
         extracting = true;
         inserted = false;
         insertionStarted = false;
@@ -2120,7 +2270,7 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
           playDropSound(i === CURRENT_BRAND_INDEX ? 0.055 : 0.032);
         }
 
-        // Hover-effect: tegel kantelt richting de muis als erover gehovered wordt.
+        // Hover/inspect-effect: na insertie kan iedere tegel naar voren gehaald worden.
         const hover = inserted && hoveredWallTileIndex === i ? 1 : 0;
         const tremble = hover ? Math.sin(elapsed * 28 + i * 0.7) * 0.04 : 0;
         let hRX = 0,
@@ -2144,10 +2294,11 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
 
         // Invlieg-animatie: interpoleer van off-screen startpositie naar doelpositie.
         let ePX = mesh.userData.baseX, ePY = mesh.userData.baseY, ePZ = 0, eRX = 0, eRY = 0, eRZ = 0;
+        let entranceLocalT = wallEntranceComplete ? 1 : 0;
         if (!wallEntranceComplete) {
-          const localT = THREE.MathUtils.clamp((wallEntranceElapsed - mesh.userData.entranceDelay) / mesh.userData.entranceDuration, 0, 1);
-          const ease   = smootherStep(localT);
-          const floatArc = Math.sin(localT * Math.PI);
+          entranceLocalT = THREE.MathUtils.clamp((wallEntranceElapsed - mesh.userData.entranceDelay) / mesh.userData.entranceDuration, 0, 1);
+          const ease   = smootherStep(entranceLocalT);
+          const floatArc = Math.sin(entranceLocalT * Math.PI);
           ePX = THREE.MathUtils.lerp(mesh.userData.fromX ?? mesh.userData.baseX, mesh.userData.baseX, ease);
           ePY = THREE.MathUtils.lerp(mesh.userData.fromY ?? mesh.userData.baseY, mesh.userData.baseY, ease)
             + Math.sin(wallEntranceElapsed * 1.65 + i * 0.61) * 0.07 * floatArc;
@@ -2159,9 +2310,20 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
           eRZ = (1 - ease) * ((i % 3 - 1) * 0.04)
             + Math.sin(wallEntranceElapsed * 1.5 + i * 0.43) * 0.035 * floatArc;
         }
+        const hiddenByInspect = i === inspectedTileOriginIndex && inspectedTile.visible;
+        mesh.visible = !hiddenByInspect && (wallEntranceComplete || (wallEntranceActive && entranceLocalT > 0.001));
 
-        mesh.position.set(ePX + radialX * wave * damp * 0.24 + tremor * 0.075, ePY - radialY * wave * damp * 0.24 + tremor * 0.012, ePZ + wave * damp * 0.14 + hover * 0.04);
-        mesh.scale.set(tileWidth, tileHeight, 1);
+        const rippleX = ePX + radialX * wave * damp * 0.24 + tremor * 0.075;
+        const rippleY = ePY - radialY * wave * damp * 0.24 + tremor * 0.012;
+        const rippleZ = ePZ + wave * damp * 0.14 + hover * 0.04;
+
+        mesh.position.x = THREE.MathUtils.damp(mesh.position.x, rippleX, 18, delta);
+        mesh.position.y = THREE.MathUtils.damp(mesh.position.y, rippleY, 18, delta);
+        mesh.position.z = THREE.MathUtils.damp(mesh.position.z, rippleZ, 18, delta);
+        mesh.scale.x = THREE.MathUtils.damp(mesh.scale.x, tileWidth, 18, delta);
+        mesh.scale.y = THREE.MathUtils.damp(mesh.scale.y, tileHeight, 18, delta);
+        mesh.scale.z = 1;
+        mesh.renderOrder = 1;
         mesh.material.opacity = 1;
         mesh.material.transparent =
           !wallEntranceComplete || mesh.material.transparent;
@@ -2184,6 +2346,75 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
           delta,
         );
       });
+
+      // ── Inspected tile: beweegt van muurtegel-positie naar voren en terug ──
+      {
+        const destX     = 0;
+        const destY     = viewHeight * 0.04;
+        const destZ     = 2.65;
+        const destScaleX = tileWidth  * 3.15;
+        const destScaleY = tileHeight * 3.15;
+        const flightSpeed = 1 / 0.55; // seconden voor open/sluit
+
+        if (inserted && inspectedWallTileIndex >= 0) {
+          // Openings-animatie: progress 0→1
+          inspectedTileOpenProgress = Math.min(1, inspectedTileOpenProgress + delta * flightSpeed);
+          const t = easeInOutCubic(inspectedTileOpenProgress);
+          const arc = Math.sin(inspectedTileOpenProgress * Math.PI) * 0.3; // kleine boog naar voren
+
+          inspectedTile.visible = true;
+          // Verberg de bron-muurtegel zodat de inspectedTile "dezelfde" lijkt
+          if (inspectedTileOriginIndex >= 0 && tiles[inspectedTileOriginIndex]) {
+            tiles[inspectedTileOriginIndex].visible = false;
+          }
+
+          inspectedTile.position.x = THREE.MathUtils.lerp(inspectedTileOriginX, destX, t);
+          inspectedTile.position.y = THREE.MathUtils.lerp(inspectedTileOriginY, destY, t);
+          inspectedTile.position.z = THREE.MathUtils.lerp(0.07, destZ, t) + arc;
+          inspectedTile.scale.x    = THREE.MathUtils.lerp(tileWidth,  destScaleX, t);
+          inspectedTile.scale.y    = THREE.MathUtils.lerp(tileHeight, destScaleY, t);
+          inspectedTile.scale.z    = 1;
+          inspectedTileMaterials.forEach((m) => { m.opacity = 1; });
+
+          // Rotatie: eenmaal vooraan, draai mee met drag
+          inspectedTile.rotation.x = THREE.MathUtils.damp(inspectedTile.rotation.x, inspectedDragState.rotationX * t, 12, delta);
+          inspectedTile.rotation.y = THREE.MathUtils.damp(inspectedTile.rotation.y, inspectedDragState.rotationY * t, 12, delta);
+          inspectedTile.rotation.z = THREE.MathUtils.damp(inspectedTile.rotation.z, 0, 12, delta);
+
+        } else if (inspectedTileClosing && inspectedTile.visible) {
+          // Sluit-animatie: progress 0→1, rijdt terug naar muurtegel
+          inspectedTileCloseProgress = Math.min(1, inspectedTileCloseProgress + delta * flightSpeed);
+          const t = easeInOutCubic(inspectedTileCloseProgress);
+          const arc = Math.sin((1 - inspectedTileCloseProgress) * Math.PI) * 0.3;
+
+          inspectedTile.position.x = THREE.MathUtils.lerp(destX, inspectedTileOriginX, t);
+          inspectedTile.position.y = THREE.MathUtils.lerp(destY, inspectedTileOriginY, t);
+          inspectedTile.position.z = THREE.MathUtils.lerp(destZ, 0.07, t) + arc;
+          inspectedTile.scale.x    = THREE.MathUtils.lerp(destScaleX, tileWidth,  t);
+          inspectedTile.scale.y    = THREE.MathUtils.lerp(destScaleY, tileHeight, t);
+          inspectedTile.scale.z    = 1;
+          inspectedTile.rotation.x = THREE.MathUtils.damp(inspectedTile.rotation.x, 0, 10, delta);
+          inspectedTile.rotation.y = THREE.MathUtils.damp(inspectedTile.rotation.y, 0, 10, delta);
+          inspectedTile.rotation.z = 0;
+          inspectedTileMaterials.forEach((m) => { m.opacity = 1; });
+
+          if (inspectedTileCloseProgress >= 1) {
+            inspectedTileClosing = false;
+            inspectedTile.visible = false;
+            inspectedTileMaterials.forEach((m) => { m.opacity = 1; });
+            inspectedTile.position.set(inspectedTileOriginX, inspectedTileOriginY, 0.07);
+            inspectedTile.scale.set(tileWidth, tileHeight, 1);
+            inspectedTile.rotation.set(0, 0, 0);
+            // Zet de muurtegel weer zichtbaar
+            if (inspectedTileOriginIndex >= 0 && tiles[inspectedTileOriginIndex]) {
+              tiles[inspectedTileOriginIndex].visible = true;
+            }
+            inspectedTileOriginIndex = -1;
+          }
+        } else if (inspectedTile.visible) {
+          inspectedTile.visible = false;
+        }
+      }
 
       // ── Inserted brand tile hover ────────────────────────────────────────
 
@@ -2292,6 +2523,7 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
       [emptyMaterial, blankMaterial, ritualsMaterial, burgerkingMaterial, currentBrandMaterial, tileBackMaterial, ceramicSideMaterial, lockedMaterial, revealLightMaterial, crackOverlayMaterial].forEach((m) => m.dispose());
       currentBrandWallTile.material.dispose();
       floatingMaterials.forEach((m) => m.dispose());
+      inspectedTileMaterials.forEach((m) => m.dispose());
       if (host.contains(renderer.domElement))
         host.removeChild(renderer.domElement);
       floatingTileRef.current = null;
