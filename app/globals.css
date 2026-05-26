@@ -517,9 +517,9 @@ button {
   --entry-tunnel-opacity: 0;
   --entry-flash-opacity: 0;
   --entry-chrome-opacity: 1;
-  transform: translateY(8%) scale(1.14);
+  transform: none;
   transform-origin: 50% 58%;
-  animation: entryBuildingRideIn 3800ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: none;
 }
 
 .entry-transition-building-3d canvas {
@@ -528,10 +528,9 @@ button {
   z-index: 1;
   width: 100%;
   height: 100%;
-  transform: scale(var(--entry-canvas-scale));
-  transform-origin: 50% 58%;
-  opacity: var(--entry-canvas-opacity);
-  filter: saturate(1.02) contrast(1.02);
+  transform: none;
+  opacity: 1;
+  filter: none;
 }
 
 .entry-doorway-shadow {
@@ -653,16 +652,15 @@ button {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transition:
-    opacity 220ms ease,
-    visibility 220ms ease;
   max-height: 100vh;
+  transition: opacity 0.6s ease, visibility 0s linear 0.6s;
 }
 
 .code-activation-scene-visible {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
+  transition: opacity 0s linear, visibility 0s linear;
 }
 
 .code-activation-scene-frame {
@@ -687,13 +685,15 @@ button {
   position: absolute;
   inset: 0;
   z-index: 1;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
 }
 
 .code-activation-scene-door canvas {
   display: block;
-  width: 100%;
-  height: 100%;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .codeInstructions{

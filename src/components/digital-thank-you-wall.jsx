@@ -100,6 +100,7 @@ export default function DigitalThankYouWall() {
   const [entryTransitionVisible, setEntryTransitionVisible] = useState(false);
   const [entryTransitionDone, setEntryTransitionDone] = useState(false);
   const [entryBuildingReady, setEntryBuildingReady] = useState(false);
+  const [entryFadeOpacity, setEntryFadeOpacity] = useState(0);
   const [buildingEntered, setBuildingEntered] = useState(false);
 
   // codeActivatie scene
@@ -294,6 +295,10 @@ export default function DigitalThankYouWall() {
     () => setEntryBuildingReady(true),
     [],
   );
+  const handleEntryFadeProgress = useCallback(
+    (v) => setEntryFadeOpacity(v),
+    [],
+  );
   const handleTileImpact = useCallback(
     () => setDecorImpactSignal((value) => value + 1),
     [],
@@ -467,7 +472,10 @@ export default function DigitalThankYouWall() {
             alt=""
           />
           {entryTransitionVisible && !entryTransitionDone && (
-            <EntryBuildingModel onReady={handleEntryBuildingReady} />
+            <EntryBuildingModel
+              onReady={handleEntryBuildingReady}
+              onFadeProgress={handleEntryFadeProgress}
+            />
           )}
           <img
             className="entry-transition-logo"
@@ -475,6 +483,18 @@ export default function DigitalThankYouWall() {
             alt=""
           />
           <div className="entry-transition-title">Your Place on the Wall</div>
+          {entryFadeOpacity > 0 && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: 50,
+                background: '#ffffff',
+                opacity: entryFadeOpacity,
+                pointerEvents: 'none',
+              }}
+            />
+          )}
         </div>
       </div>
 
@@ -488,6 +508,7 @@ export default function DigitalThankYouWall() {
           />
         )}
       </div>
+
     </main>
   );
 }
