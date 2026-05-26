@@ -35,6 +35,8 @@ const LOADING_BACKGROUND = `/assets/figma/achtergrondloading.svg?${CACHE_VERSION
 
 // Korte ademruimte na de witte entry-flash voordat de codescene verschijnt.
 const ENTRY_TRANSITION_DURATION = 250;
+const SCENE_COVER_FADE_OUT_MS = 1100;
+const ACTIVATION_TO_TILE_FADE_IN_MS = 650;
 
 // Nooddata als partners.json niet laadbaar is (bijv. offline of tijdens ontwikkeling).
 const FALLBACK_PARTNERS = [
@@ -111,6 +113,9 @@ export default function DigitalThankYouWall() {
   const [decorImpactSignal, setDecorImpactSignal] = useState(0);
   const [wallEntranceReady, setWallEntranceReady] = useState(false);
   const [lockedGlowReady, setLockedGlowReady] = useState(false);
+  const [tileBaseElementsReady, setTileBaseElementsReady] = useState(false);
+  const [activationTileRevealPending, setActivationTileRevealPending] =
+    useState(false);
 
   // Vazen zijn zichtbaar zodra het gebouw betreden is.
   // Muur gaat pas bewegen na 9s (nadat de vaas-animatie klaar is).
@@ -166,6 +171,7 @@ export default function DigitalThankYouWall() {
   const hintSwapTimer = useRef(null);
   const sceneTransitionCoverTimer = useRef(null);
   const sceneTransitionCoverFrame = useRef(null);
+  const activationToTileTimer = useRef(null);
 
   const revealHintText = (el, text) => {
     hintSplit.current?.revert();
@@ -301,6 +307,10 @@ export default function DigitalThankYouWall() {
     () => setDecorImpactSignal((value) => value + 1),
     [],
   );
+  const handleTileBaseElementsReady = useCallback(
+    () => setTileBaseElementsReady(true),
+    [],
+  );
   const handleWallEntranceComplete = useCallback(() => {
     /* muur is klaar, niets meer te doen */
   }, []);
@@ -332,6 +342,9 @@ export default function DigitalThankYouWall() {
       }
       if (sceneTransitionCoverTimer.current) {
         window.clearTimeout(sceneTransitionCoverTimer.current);
+      }
+      if (activationToTileTimer.current) {
+        window.clearTimeout(activationToTileTimer.current);
       }
     };
   }, []);
@@ -366,7 +379,7 @@ export default function DigitalThankYouWall() {
       sceneTransitionCoverTimer.current = window.setTimeout(() => {
         setSceneTransitionCover("hidden");
         sceneTransitionCoverTimer.current = null;
-      }, 1100);
+      }, SCENE_COVER_FADE_OUT_MS);
     }, ENTRY_TRANSITION_DURATION);
 
     return () => window.clearTimeout(timer);
@@ -376,11 +389,60 @@ export default function DigitalThankYouWall() {
   // en gaat de ervaring verder naar de tegel-kamer.
   useEffect(() => {
     if (!codeActivationSceneDone) return;
-    setCodeActivationSceneVisible(false);
-    setBuildingEntered(true);
-    setFocusOverlayVisible(false);
-    setRevealLightVisible(false);
+
+    if (sceneTransitionCoverFrame.current) {
+      window.cancelAnimationFrame(sceneTransitionCoverFrame.current);
+      sceneTransitionCoverFrame.current = null;
+    }
+    if (sceneTransitionCoverTimer.current) {
+      window.clearTimeout(sceneTransitionCoverTimer.current);
+      sceneTransitionCoverTimer.current = null;
+    }
+    if (activationToTileTimer.current) {
+      window.clearTimeout(activationToTileTimer.current);
+      activationToTileTimer.current = null;
+    }
+
+    setSceneTransitionCover("transparent");
+    sceneTransitionCoverFrame.current = window.requestAnimationFrame(() => {
+      setSceneTransitionCover("fade-in");
+      sceneTransitionCoverFrame.current = null;
+    });
+
+    activationToTileTimer.current = window.setTimeout(() => {
+      setSceneTransitionCover("solid");
+      setTileBaseElementsReady(false);
+      setCodeActivationSceneVisible(false);
+      setBuildingEntered(true);
+      setFocusOverlayVisible(false);
+      setRevealLightVisible(false);
+      setActivationTileRevealPending(true);
+      activationToTileTimer.current = null;
+    }, ACTIVATION_TO_TILE_FADE_IN_MS);
   }, [codeActivationSceneDone]);
+
+  useEffect(() => {
+    if (!activationTileRevealPending || !tileBaseElementsReady) return;
+
+    if (sceneTransitionCoverFrame.current) {
+      window.cancelAnimationFrame(sceneTransitionCoverFrame.current);
+      sceneTransitionCoverFrame.current = null;
+    }
+    if (sceneTransitionCoverTimer.current) {
+      window.clearTimeout(sceneTransitionCoverTimer.current);
+      sceneTransitionCoverTimer.current = null;
+    }
+
+    sceneTransitionCoverFrame.current = window.requestAnimationFrame(() => {
+      setSceneTransitionCover("fade-out");
+      sceneTransitionCoverFrame.current = null;
+    });
+    sceneTransitionCoverTimer.current = window.setTimeout(() => {
+      setSceneTransitionCover("hidden");
+      setActivationTileRevealPending(false);
+      sceneTransitionCoverTimer.current = null;
+    }, SCENE_COVER_FADE_OUT_MS);
+  }, [activationTileRevealPending, tileBaseElementsReady]);
 
   // Muur start pas na 9s (vaas-animatie duurt 7s + kleine buffer).
   useEffect(() => {
@@ -417,6 +479,7 @@ export default function DigitalThankYouWall() {
           visible={buildingEntered}
           vasesVisible={vasesVisible}
           impactSignal={decorImpactSignal}
+          onReady={handleTileBaseElementsReady}
         />
         <div className="livewall-title">Your Place on the Wall</div>
 

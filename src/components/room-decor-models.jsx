@@ -292,6 +292,7 @@ export default function RoomDecorModels({
   visible = false,
   vasesVisible = false,
   impactSignal = 0,
+  onReady,
 } = {}) {
   const hostRef = useRef(null);
   const impactSignalRef = useRef(impactSignal);
@@ -579,6 +580,8 @@ export default function RoomDecorModels({
       };
 
       resize();
+      renderer.render(scene, camera);
+      onReady?.();
       window.addEventListener('resize', resize);
       cleanupResize = () => window.removeEventListener('resize', resize);
       frameId = window.requestAnimationFrame(animate);
@@ -597,7 +600,7 @@ export default function RoomDecorModels({
         host.removeChild(renderer.domElement);
       }
     };
-  }, [active]);
+  }, [active, onReady]);
 
   return (
     <div

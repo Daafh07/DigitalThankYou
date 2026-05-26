@@ -668,11 +668,21 @@ button {
   inset: 0;
   z-index: 95;
   background: #ffffff;
+  opacity: 0;
   pointer-events: none;
+}
+
+.scene-transition-cover-transparent {
+  opacity: 0;
 }
 
 .scene-transition-cover-solid {
   opacity: 1;
+}
+
+.scene-transition-cover-fade-in {
+  opacity: 1;
+  transition: opacity 650ms ease;
 }
 
 .scene-transition-cover-fade-out {
