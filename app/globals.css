@@ -139,12 +139,12 @@ button {
 .tile-hint {
   position: absolute;
   left: 50%;
-  bottom: 6.5%;
+  bottom: clamp(40px, 8vh, 100px);
   z-index: 100;
   transform: translateX(-50%);
   color: rgba(23, 89, 187, 0.62);
   font-family: "Playfair Display", Georgia, serif;
-  font-size: clamp(10px, 1.35vw, 19px);
+  font-size: clamp(14px, 1.8vw, 26px);
   font-style: italic;
   letter-spacing: 0.04em;
   text-align: center;
@@ -153,6 +153,23 @@ button {
   pointer-events: none;
   visibility: hidden;
   perspective: 400px;
+}
+
+.tile-hint--small {
+  font-size: clamp(10px, 1.1vw, 16px);
+}
+
+@media (max-height: 500px) {
+  .tile-hint {
+    bottom: clamp(8px, 2vh, 16px);
+    font-size: clamp(9px, 1.8vw, 13px);
+  }
+}
+
+@media (min-height: 900px) {
+  .tile-hint {
+    bottom: clamp(40px, 5vh, 70px);
+  }
 }
 
 .livewall-logo {
