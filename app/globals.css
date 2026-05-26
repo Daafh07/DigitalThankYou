@@ -663,6 +663,23 @@ button {
   transition: opacity 0s linear, visibility 0s linear;
 }
 
+.scene-transition-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: #ffffff;
+  pointer-events: none;
+}
+
+.scene-transition-cover-solid {
+  opacity: 1;
+}
+
+.scene-transition-cover-fade-out {
+  opacity: 0;
+  transition: opacity 1100ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .code-activation-scene-frame {
   position: absolute;
   left: 50%;

@@ -19,7 +19,9 @@ import EntryBuildingModel, {
 import HeroScene from "./hero-scene";
 import LoadingAnimation from "./loading-animation";
 import RoomDecorModels from "./room-decor-models";
-import CodeActivationScene from "./code-activation-scene";
+import CodeActivationScene, {
+  preloadCodeActivationSceneModel,
+} from "./code-activation-scene";
 
 gsap.registerPlugin(SplitText);
 
@@ -30,10 +32,9 @@ gsap.registerPlugin(SplitText);
 const CACHE_VERSION = "v3";
 
 const LOADING_BACKGROUND = `/assets/figma/achtergrondloading.svg?${CACHE_VERSION}`;
-const ENTRY_BUILDING_MODEL = "/assets/models/buildings/Livewall-gebouw.glb";
 
-// Hoe lang de gebouw-ingangsanimatie duurt voordat de muur zichtbaar wordt (ms).
-const ENTRY_TRANSITION_DURATION = 4200;
+// Korte ademruimte na de witte entry-flash voordat de codescene verschijnt.
+const ENTRY_TRANSITION_DURATION = 250;
 
 // Nooddata als partners.json niet laadbaar is (bijv. offline of tijdens ontwikkeling).
 const FALLBACK_PARTNERS = [
@@ -73,14 +74,6 @@ function loadImage(src) {
   });
 }
 
-// Haalt het 3D-gebouwmodel op en slaat het op in de browsercache.
-// Three.js kan het daarna direct uit de cache lezen zonder extra netwerkverzoek.
-function loadModel(src) {
-  return fetch(src, { cache: "force-cache" })
-    .then((res) => res.blob())
-    .catch(() => null);
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function DigitalThankYouWall() {
@@ -101,6 +94,7 @@ export default function DigitalThankYouWall() {
   const [entryTransitionDone, setEntryTransitionDone] = useState(false);
   const [entryBuildingReady, setEntryBuildingReady] = useState(false);
   const [entryFadeOpacity, setEntryFadeOpacity] = useState(0);
+  const [sceneTransitionCover, setSceneTransitionCover] = useState("hidden");
   const [buildingEntered, setBuildingEntered] = useState(false);
 
   // codeActivatie scene
@@ -126,6 +120,7 @@ export default function DigitalThankYouWall() {
   // Het model is zwaar (GLB), dus zo vroeg mogelijk beginnen bespaart wachttijd later.
   useEffect(() => {
     preloadEntryBuildingModel();
+    preloadCodeActivationSceneModel();
 
     fetch("/assets/data/partners.json")
       .then((res) => (res.ok ? res.json() : FALLBACK_PARTNERS))
@@ -149,7 +144,8 @@ export default function DigitalThankYouWall() {
       loadImage(`/assets/figma/interstitial-building.png?${CACHE_VERSION}`),
       loadImage(`/assets/figma/codeActivationBg.png?${CACHE_VERSION}`),
       loadImage(LOADING_BACKGROUND),
-      loadModel(ENTRY_BUILDING_MODEL),
+      preloadEntryBuildingModel(),
+      preloadCodeActivationSceneModel(),
     ]).then(() => {
       if (!cancelled) setAssetsReady(true);
     });
@@ -168,6 +164,8 @@ export default function DigitalThankYouWall() {
   const hintRef = useRef(null);
   const hintSplit = useRef(null);
   const hintSwapTimer = useRef(null);
+  const sceneTransitionCoverTimer = useRef(null);
+  const sceneTransitionCoverFrame = useRef(null);
 
   const revealHintText = (el, text) => {
     hintSplit.current?.revert();
@@ -321,9 +319,22 @@ export default function DigitalThankYouWall() {
     if (!loadingComplete || entryTransitionDone) return undefined;
 
     setEntryBuildingReady(false); // reset de ready-vlag zodat het 3D-gebouw opnieuw inlaadt
+    setEntryFadeOpacity(0);
+    setSceneTransitionCover("hidden");
     setEntryTransitionVisible(true);
     return undefined;
   }, [entryTransitionDone, loadingComplete]);
+
+  useEffect(() => {
+    return () => {
+      if (sceneTransitionCoverFrame.current) {
+        window.cancelAnimationFrame(sceneTransitionCoverFrame.current);
+      }
+      if (sceneTransitionCoverTimer.current) {
+        window.clearTimeout(sceneTransitionCoverTimer.current);
+      }
+    };
+  }, []);
 
   // Start de timer zodra het 3D-gebouw zijn eerste frame heeft getekend.
   // Na ENTRY_TRANSITION_DURATION ms gaan we door naar de muurscène.
@@ -332,12 +343,30 @@ export default function DigitalThankYouWall() {
       return undefined;
 
     const timer = window.setTimeout(() => {
+      if (sceneTransitionCoverFrame.current) {
+        window.cancelAnimationFrame(sceneTransitionCoverFrame.current);
+        sceneTransitionCoverFrame.current = null;
+      }
+      if (sceneTransitionCoverTimer.current) {
+        window.clearTimeout(sceneTransitionCoverTimer.current);
+        sceneTransitionCoverTimer.current = null;
+      }
+
+      setSceneTransitionCover("solid");
       setEntryTransitionDone(true);
       setEntryTransitionVisible(false);
       setBuildingEntered(false);
       setCodeActivationSceneVisible(true);
       setFocusOverlayVisible(false);
       setRevealLightVisible(false);
+
+      sceneTransitionCoverFrame.current = window.requestAnimationFrame(() => {
+        setSceneTransitionCover("fade-out");
+      });
+      sceneTransitionCoverTimer.current = window.setTimeout(() => {
+        setSceneTransitionCover("hidden");
+        sceneTransitionCoverTimer.current = null;
+      }, 1100);
     }, ENTRY_TRANSITION_DURATION);
 
     return () => window.clearTimeout(timer);
@@ -508,6 +537,12 @@ export default function DigitalThankYouWall() {
           />
         )}
       </div>
+
+      {sceneTransitionCover !== "hidden" && (
+        <div
+          className={`scene-transition-cover scene-transition-cover-${sceneTransitionCover}`}
+        />
+      )}
 
     </main>
   );

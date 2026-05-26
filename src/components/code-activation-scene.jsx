@@ -2,6 +2,25 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 
 const VALID_CODE = "12345";
+const DOOR_MODEL_PATH = "/assets/models/decor/deurCodeScene.glb";
+
+let doorPreloadPromise = null;
+let preloadedDoorScene = null;
+
+export async function preloadCodeActivationSceneModel() {
+  if (preloadedDoorScene) return preloadedDoorScene;
+  if (doorPreloadPromise) return doorPreloadPromise;
+
+  doorPreloadPromise = import("three/examples/jsm/loaders/GLTFLoader.js")
+    .then(({ GLTFLoader }) => new GLTFLoader().loadAsync(DOOR_MODEL_PATH))
+    .then((gltf) => {
+      preloadedDoorScene = gltf.scene;
+      return preloadedDoorScene;
+    })
+    .catch(() => null);
+
+  return doorPreloadPromise;
+}
 
 function CodeInput({ onCorrect }) {
   const [values, setValues] = useState(["", "", "", "", ""]);
@@ -79,8 +98,6 @@ function DoorModel({ onReady, shouldOpen, onOpenComplete }) {
 
     async function init() {
       const THREE = await import("three");
-      const { GLTFLoader } =
-        await import("three/examples/jsm/loaders/GLTFLoader.js");
 
       const renderer = new THREE.WebGLRenderer({
         antialias: true,
@@ -100,11 +117,17 @@ function DoorModel({ onReady, shouldOpen, onOpenComplete }) {
       const scene = new THREE.Scene();
       scene.add(new THREE.HemisphereLight(0xffffff, 0xd8e7ff, 2.25));
 
-      const gltf = await new GLTFLoader().loadAsync(
-        "/assets/models/decor/deurCodeScene.glb",
-      );
-
-      const door = gltf.scene;
+      const doorSource = await preloadCodeActivationSceneModel();
+      const door = doorSource?.clone(true);
+      if (!door) {
+        onReady?.();
+        return () => {
+          renderer.dispose();
+          if (renderer.domElement && host.contains(renderer.domElement)) {
+            host.removeChild(renderer.domElement);
+          }
+        };
+      }
 
       const box = new THREE.Box3().setFromObject(door);
       const width = box.getSize(new THREE.Vector3()).x;

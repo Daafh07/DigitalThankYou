@@ -13,7 +13,7 @@ const CAM_END_Z     = 0.3;
 const CAM_END_Y     = -0.85;
 const HOLD_DURATION = 2.0;
 const FLY_DURATION  = 3.2;
-const FADE_START    = 0.25;
+const FADE_START    = 0.55;
 
 function smootherStep(t) {
   return t * t * t * (t * (t * 6 - 15) + 10);
