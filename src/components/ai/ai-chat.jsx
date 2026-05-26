@@ -36,9 +36,9 @@ import { useGeneratedTilesStore } from "@/store/generated-tiles-store";
  */
 
 /**
- * @param {{ isOpen: boolean; onClose: () => void }} props
+ * @param {{ isOpen: boolean; onClose: () => void; mode?: 'overlay' | 'inline' }} props
  */
-export default function AiChat({ isOpen, onClose }) {
+export default function AiChat({ isOpen, onClose, mode = "overlay" }) {
   const addTile = useGeneratedTilesStore((s) => s.addTile);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -68,7 +68,7 @@ export default function AiChat({ isOpen, onClose }) {
         id: "welcome",
         role: "assistant",
         content:
-          "Upload eerst je partnerlogo met de knop links onderin. Daarna kies je een jaartal; pas als alle stappen klaar zijn, genereren we je tegel.",
+          "Welkom! Ik help je graag een prachtig Delfts blauw tegeltje te maken.\n\nUpload je logo en ik genereer een uniek tegeltje voor je.",
       },
     ]),
   );
@@ -89,15 +89,17 @@ export default function AiChat({ isOpen, onClose }) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
 
+  const isVisible = mode === "inline" ? true : isOpen;
+
   useEffect(() => {
-    if (isOpen) {
+    if (isVisible) {
       preloadEmptyTileTexture();
       const timer = setTimeout(() => inputRef.current?.focus(), 280);
       return () => clearTimeout(timer);
     }
     resetSession();
     return undefined;
-  }, [isOpen, resetSession]);
+  }, [isVisible, resetSession]);
 
   useEffect(() => {
     listRef.current?.scrollTo({
@@ -189,7 +191,7 @@ export default function AiChat({ isOpen, onClose }) {
         id: "welcome",
         role: "assistant",
         content:
-          "Upload eerst je partnerlogo met de knop links onderin. Daarna kies je een jaartal; pas als alle stappen klaar zijn, genereren we je tegel.",
+          "Welkom! Ik help je graag een prachtig Delfts blauw tegeltje te maken.\n\nUpload je logo en ik genereer een uniek tegeltje voor je.",
       },
     ]);
   }, [resetSession]);
@@ -317,57 +319,303 @@ export default function AiChat({ isOpen, onClose }) {
         ? "Kies eerst een jaartal…"
         : "Optioneel: titel of beschrijving…";
 
+  const welcomeText =
+    messages.find((m) => m.id === "welcome")?.content ??
+    "Welkom! Ik help je graag een prachtig Delfts blauw tegeltje te maken.\n\nUpload je logo en ik genereer een uniek tegeltje voor je.";
+
+  const threadMessages = messages.filter((m) => m.id !== "welcome");
+
+  // Inline mode: design + volledige flow (logo → jaartal → genereren)
+  if (mode === "inline") {
+    return (
+      <div className="mx-auto w-full max-w-6xl px-4 pb-10 sm:px-6 lg:max-w-7xl">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+          className="sr-only"
+          aria-hidden
+          onChange={handleLogoSelect}
+        />
+
+        <div
+          className={[
+            "grid gap-8 pt-8",
+            "grid-cols-1",
+            "md:grid-cols-[minmax(0,1.65fr)_minmax(200px,1fr)]",
+            "lg:grid-cols-[minmax(0,1.75fr)_minmax(240px,320px)]",
+            "lg:gap-10",
+          ].join(" ")}
+        >
+          {/* Kolom 1: chat (breder) */}
+          <section aria-label="Chat" className="min-w-0 space-y-6">
+            <div className="flex items-start gap-4 sm:gap-5">
+              <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#1f4fc9] text-white shadow">
+                <Sparkles size={18} />
+              </div>
+              <div className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm sm:px-6 sm:py-5">
+                {String(welcomeText)
+                  .split("\n")
+                  .filter(Boolean)
+                  .map((line, i) => (
+                    <p
+                      key={line}
+                      className={
+                        i === 0
+                          ? "text-sm font-medium text-slate-900"
+                          : "mt-2 text-sm text-slate-700"
+                      }
+                    >
+                      {line}
+                    </p>
+                  ))}
+              </div>
+            </div>
+
+            {threadMessages.length > 0 && (
+              <div ref={listRef} className="space-y-4">
+                {threadMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={[
+                      "flex gap-3",
+                      msg.role === "user" ? "justify-end" : "justify-start",
+                    ].join(" ")}
+                  >
+                    {msg.role === "assistant" && (
+                      <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1f4fc9] text-white shadow">
+                        <Sparkles size={16} />
+                      </div>
+                    )}
+                    <div
+                      className={[
+                        "max-w-[90%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+                        msg.role === "user"
+                          ? "bg-[#1f4fc9] text-white"
+                          : msg.status === "error"
+                            ? "border border-rose-200 bg-rose-50 text-rose-800"
+                            : "border border-slate-200 bg-white text-slate-800 shadow-sm",
+                      ].join(" ")}
+                    >
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                      {msg.yearPicker && flowStep === "awaiting_year" && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {TILE_YEAR_OPTIONS.map((year) => (
+                            <button
+                              key={year}
+                              type="button"
+                              disabled={isLoading || isProcessingLogo}
+                              onClick={() => handleYearSelect(year)}
+                              className={[
+                                "rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-1.5 text-sm font-semibold text-blue-700",
+                                "transition hover:bg-blue-100",
+                                "disabled:cursor-not-allowed disabled:opacity-45",
+                              ].join(" ")}
+                            >
+                              {year}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {(isLoading || isProcessingLogo) && (
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <Loader2 size={16} className="animate-spin text-blue-600" />
+                    {isProcessingLogo
+                      ? "Logo omzetten naar Delft-blauw…"
+                      : "Tegel genereren…"}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(flowStep === "awaiting_logo" || isProcessingLogo) && (
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!canUploadLogo || isProcessingLogo}
+                  className={[
+                    "group w-full rounded-2xl border-2 border-dashed border-slate-200",
+                    "bg-slate-50/40 px-6 py-8 text-center transition",
+                    "hover:border-blue-300 hover:bg-blue-50/30",
+                    "disabled:cursor-not-allowed disabled:opacity-60",
+                  ].join(" ")}
+                  aria-label="Upload een logo"
+                >
+                  <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600/10 text-blue-700">
+                    {isProcessingLogo ? (
+                      <Loader2 size={20} className="animate-spin" />
+                    ) : (
+                      <ImagePlus size={20} />
+                    )}
+                  </div>
+                  <p className="mt-3 text-sm font-semibold text-blue-700">
+                    Upload een logo
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Sleep een bestand hierheen of klik om te selecteren
+                  </p>
+                  <p className="mt-3 text-[11px] text-slate-400">
+                    PNG, JPG, SVG tot 5MB
+                  </p>
+                </button>
+              </div>
+            )}
+
+            {flowStep === "awaiting_confirm" && (
+              <form onSubmit={handleSubmit}>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder="Optioneel: titel of beschrijving…"
+                      disabled={inputDisabled}
+                      className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-50"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!canSubmit}
+                      className={[
+                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                        "bg-[#1f4fc9] text-white transition",
+                        "hover:bg-[#1a45b4] disabled:cursor-not-allowed disabled:opacity-40",
+                      ].join(" ")}
+                      aria-label="Tegel genereren"
+                    >
+                      {isLoading ? (
+                        <Loader2 size={18} className="animate-spin" />
+                      ) : (
+                        <Send size={18} />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            {logoFileName && flowStep !== "awaiting_logo" && (
+              <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                <span className="truncate">
+                  Logo: {logoFileName}
+                  {draft?.year ? ` · Jaar: ${draft.year}` : ""}
+                </span>
+                {flowStep !== "generating" && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveLogo}
+                    className="shrink-0 text-blue-700 hover:underline"
+                  >
+                    Opnieuw beginnen
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* Kolom 2: tegelpreview (smaller) */}
+          <aside
+            aria-label="Tegelvoorbeeld"
+            className="min-w-0 md:sticky md:top-8 md:self-start"
+          >
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Voorbeeld tegel
+              </p>
+              <TilePreview3D
+                frontText={previewText ?? ""}
+                logoBlueDataUrl={logoBlueDataUrl}
+                tileFrontDataUrl={previewTileTexture}
+                backYear={previewYear}
+                isGenerating={isLoading || isProcessingLogo}
+                showEmptyTile
+                variant="light"
+                className="border-0 shadow-none"
+                canvasClassName="aspect-[79/82] min-h-[240px]"
+              />
+            </div>
+          </aside>
+        </div>
+      </div>
+    );
+  }
+
+
+  const panelClassName =
+    mode === "inline"
+      ? [
+          "relative w-full overflow-hidden rounded-2xl border border-white/15",
+          "bg-white/70 shadow-xl backdrop-blur-xl",
+        ].join(" ")
+      : [
+          "fixed bottom-24 right-6 z-50 flex w-[min(440px,calc(100vw-2rem))] flex-col",
+          "overflow-hidden rounded-2xl border border-white/15",
+          "bg-slate-900/85 shadow-2xl backdrop-blur-2xl",
+        ].join(" ");
+
   return (
     <AnimatePresence>
-      {isOpen && (
+      {isVisible && (
         <>
-          <motion.div
-            key="backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.22 }}
-            className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm"
-            onClick={onClose}
-            aria-hidden
-          />
+          {mode === "overlay" && (
+            <motion.div
+              key="backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.22 }}
+              className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm"
+              onClick={onClose}
+              aria-hidden
+            />
+          )}
 
           <motion.div
             key="panel"
             role="dialog"
-            aria-modal="true"
+            aria-modal={mode === "overlay"}
             aria-label="AI tegel generator"
-            initial={{ opacity: 0, y: 32, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 24, scale: 0.97 }}
-            transition={{ type: "spring", stiffness: 380, damping: 32 }}
-            className={[
-              "fixed bottom-24 right-6 z-50 flex w-[min(440px,calc(100vw-2rem))] flex-col",
-              "overflow-hidden rounded-2xl border border-white/15",
-              "bg-slate-900/85 shadow-2xl backdrop-blur-2xl",
-            ].join(" ")}
-            style={{ maxHeight: "min(680px, calc(100vh - 6rem))" }}
+            initial={mode === "overlay" ? { opacity: 0, y: 32, scale: 0.96 } : { opacity: 1 }}
+            animate={mode === "overlay" ? { opacity: 1, y: 0, scale: 1 } : { opacity: 1 }}
+            exit={mode === "overlay" ? { opacity: 0, y: 24, scale: 0.97 } : { opacity: 1 }}
+            transition={mode === "overlay" ? { type: "spring", stiffness: 380, damping: 32 } : { duration: 0 }}
+            className={panelClassName}
+            style={
+              mode === "overlay"
+                ? { maxHeight: "min(680px, calc(100vh - 6rem))" }
+                : undefined
+            }
           >
             <motion.div
-              className="flex items-center justify-between border-b border-white/10 px-5 py-4"
+              className="relative flex items-center justify-between bg-[#1f4fc9] px-5 py-4"
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.08 }}
             >
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.18)_0%,transparent_60%)]"
+              />
               <motion.div
-                className="flex items-center gap-2.5"
+                className="relative flex items-center gap-2.5"
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.1 }}
               >
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/20 text-blue-300">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 text-white">
                   <Sparkles size={18} />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-white">
                     Nieuwe tegel
                   </p>
-                  <p className="text-xs text-white/50">
+                  <p className="text-xs text-white/80">
                     Logo → jaartal → genereren
                   </p>
                 </div>
@@ -376,19 +624,20 @@ export default function AiChat({ isOpen, onClose }) {
                 type="button"
                 onClick={onClose}
                 aria-label="Chat sluiten"
-                className="flex h-8 w-8 items-center justify-center rounded-full text-white/60 transition hover:bg-white/10 hover:text-white"
+                className="relative flex h-8 w-8 items-center justify-center rounded-full text-white/80 transition hover:bg-white/15 hover:text-white"
               >
                 <X size={16} />
               </button>
             </motion.div>
 
             {showPreview && (
-              <div className="shrink-0 space-y-2 border-b border-white/10 px-4 py-4">
+              <div className="shrink-0 space-y-2 border-b border-white/10 px-4 py-3">
                 <p className="text-xs font-medium text-white/50">
-                  Voorbeeld tegel (emptytile + logo)
+                  Voorbeeld tegel (AI-gegenereerde keramiek)
                 </p>
                 <TilePreview3D
                   frontText={previewText ?? ""}
+                  logoBlueDataUrl={logoBlueDataUrl}
                   tileFrontDataUrl={previewTileTexture}
                   backYear={previewYear}
                   isGenerating={isLoading || isProcessingLogo}

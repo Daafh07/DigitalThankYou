@@ -10,6 +10,7 @@ import { Canvas, useLoader, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import {
+  createEmptyTileFrontTexture,
   createTileFrontTextureFromDataUrl,
   createTileFrontTextureWithLogo,
 } from "@/lib/tile-front-composite";
@@ -38,14 +39,20 @@ function TilePreviewMesh({
   tileFrontDataUrl = null,
   backYear = null,
   isGenerating = false,
+  showEmptyTile = false,
 }) {
   const { gl } = useThree();
   const [composedFrontMap, setComposedFrontMap] = useState(
     /** @type {THREE.CanvasTexture | null} */ (null),
   );
+  const [emptyFrontMap, setEmptyFrontMap] = useState(
+    /** @type {THREE.CanvasTexture | null} */ (null),
+  );
 
   const sideMap = useLoader(THREE.TextureLoader, CERAMIC_EDGE_TEXTURE);
   const useComposedFront = Boolean(tileFrontDataUrl || logoBlueDataUrl);
+  const useEmptyTile =
+    showEmptyTile && !useComposedFront && !frontText.trim();
 
   const textFrontMap = useMemo(
     () => (useComposedFront ? null : createTileFrontTexture(frontText, gl)),
@@ -97,7 +104,39 @@ function TilePreviewMesh({
     };
   }, [tileFrontDataUrl, logoBlueDataUrl, gl, useComposedFront]);
 
-  const frontMap = useComposedFront ? composedFrontMap : textFrontMap;
+  useEffect(() => {
+    if (!useEmptyTile) {
+      setEmptyFrontMap(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    let texture = /** @type {THREE.CanvasTexture | null} */ (null);
+
+    createEmptyTileFrontTexture(gl)
+      .then((map) => {
+        if (cancelled) {
+          map.dispose();
+          return;
+        }
+        texture = map;
+        setEmptyFrontMap(map);
+      })
+      .catch(() => {
+        if (!cancelled) setEmptyFrontMap(null);
+      });
+
+    return () => {
+      cancelled = true;
+      texture?.dispose();
+    };
+  }, [useEmptyTile, gl]);
+
+  const frontMap = useComposedFront
+    ? composedFrontMap
+    : useEmptyTile
+      ? emptyFrontMap
+      : textFrontMap;
 
   useEffect(() => {
     configureSide(sideMap, gl);
@@ -107,9 +146,10 @@ function TilePreviewMesh({
     () => () => {
       textFrontMap?.dispose();
       composedFrontMap?.dispose();
+      emptyFrontMap?.dispose();
       backMap.dispose();
     },
-    [textFrontMap, composedFrontMap, backMap],
+    [textFrontMap, composedFrontMap, emptyFrontMap, backMap],
   );
 
   const sideMaterial = useMemo(
@@ -163,7 +203,7 @@ function TilePreviewMesh({
         enableZoom
         minDistance={1.4}
         maxDistance={4}
-        autoRotate={isGenerating || (useComposedFront && !composedFrontMap)}
+        autoRotate={isGenerating || (useComposedFront && !composedFrontMap) || (useEmptyTile && !emptyFrontMap)}
         autoRotateSpeed={1.4}
         minPolarAngle={Math.PI * 0.22}
         maxPolarAngle={Math.PI * 0.78}
@@ -195,6 +235,7 @@ function configureSide(texture, renderer) {
  *   backYear?: string | null;
  *   isGenerating?: boolean;
  *   className?: string;
+ *   canvasClassName?: string;
  * }} props
  */
 export default function TilePreview3D({
@@ -203,22 +244,26 @@ export default function TilePreview3D({
   tileFrontDataUrl = null,
   backYear = null,
   isGenerating = false,
+  showEmptyTile = false,
+  variant = "dark",
   className = "",
+  canvasClassName = "",
 }) {
-  const showPreview = Boolean(
-    tileFrontDataUrl || logoBlueDataUrl || frontText.trim(),
-  );
-
-  if (!showPreview) return null;
+  const isLight = variant === "light";
+  const shellClass = isLight
+    ? "relative overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+    : "relative overflow-hidden rounded-xl border border-white/10 bg-[#0a1628]/60";
+  const defaultCanvasClass = isLight ? "h-[220px] w-full" : "h-[200px] w-full";
 
   return (
-    <div
-      className={[
-        "relative overflow-hidden rounded-xl border border-white/10 bg-[#0a1628]/60",
-        className,
-      ].join(" ")}
-    >
-      <div className="h-[200px] w-full">
+    <div className={[shellClass, className].filter(Boolean).join(" ")}>
+      <div
+        className={
+          canvasClassName
+            ? ["w-full", canvasClassName].join(" ")
+            : defaultCanvasClass
+        }
+      >
         <Canvas
           camera={{ position: [0, 0, 2.35], fov: 42, near: 0.1, far: 100 }}
           gl={{ alpha: true, antialias: true }}
@@ -231,13 +276,26 @@ export default function TilePreview3D({
               tileFrontDataUrl={tileFrontDataUrl}
               backYear={backYear}
               isGenerating={isGenerating}
+              showEmptyTile={showEmptyTile}
             />
           </Suspense>
         </Canvas>
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#0a1628]/90 to-transparent px-3 pb-2.5 pt-6">
-        <p className="text-center text-[10px] tracking-wide text-white/45">
+      <div
+        className={[
+          "pointer-events-none absolute inset-x-0 bottom-0 px-3 pb-2.5 pt-6",
+          isLight
+            ? "bg-gradient-to-t from-white via-white/80 to-transparent"
+            : "bg-gradient-to-t from-[#0a1628]/90 to-transparent",
+        ].join(" ")}
+      >
+        <p
+          className={[
+            "text-center text-[10px] tracking-wide",
+            isLight ? "text-slate-400" : "text-white/45",
+          ].join(" ")}
+        >
           Sleep om de tegel te draaien
         </p>
       </div>

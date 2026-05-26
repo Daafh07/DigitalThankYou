@@ -153,3 +153,27 @@ export async function createTileFrontTextureFromDataUrl(
   const texture = new THREE.CanvasTexture(canvas);
   return configureTilePreviewTexture(texture, renderer);
 }
+/**
+ * Leeg keramisch voorvlak (emptytile.svg), zonder logo.
+ * @param {THREE.WebGLRenderer} renderer
+ * @returns {Promise<THREE.CanvasTexture>}
+ */
+export async function createEmptyTileFrontTexture(renderer) {
+  const baseTile = await getEmptyTileImage();
+
+  const canvas = document.createElement('canvas');
+  canvas.width = TEXTURE_SIZE;
+  canvas.height = TEXTURE_SIZE;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Canvas 2D context niet beschikbaar.');
+  }
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(baseTile, 0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  return configureTilePreviewTexture(texture, renderer);
+}
