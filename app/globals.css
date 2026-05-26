@@ -465,6 +465,16 @@ button {
   visibility: visible;
 }
 
+.entry-transition-fading {
+  opacity: 0;
+}
+
+.entry-transition-fading .entry-transition-building-3d {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 260ms ease;
+}
+
 .entry-transition-frame {
   position: absolute;
   left: 50%;
@@ -487,22 +497,115 @@ button {
 }
 
 .entry-transition-building-3d {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 1;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
   background-image: url("/assets/figma/achtergrondloading.svg?v3");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  --entry-door-width: 8%;
+  --entry-door-height: 24%;
+  --entry-shadow-opacity: 0;
+  --entry-inset-opacity: 0;
+  --entry-canvas-scale: 1;
+  --entry-canvas-opacity: 1;
+  --entry-speed-opacity: 0;
+  --entry-tunnel-opacity: 0;
+  --entry-flash-opacity: 0;
+  --entry-chrome-opacity: 1;
+  transform: translateY(8%) scale(1.14);
+  transform-origin: 50% 58%;
+  animation: entryBuildingRideIn 3800ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .entry-transition-building-3d canvas {
   display: block;
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
+  transform: scale(var(--entry-canvas-scale));
+  transform-origin: 50% 58%;
+  opacity: var(--entry-canvas-opacity);
+  filter: saturate(1.02) contrast(1.02);
+}
+
+.entry-doorway-shadow {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  z-index: 2;
+  width: var(--entry-door-width);
+  height: var(--entry-door-height);
+  transform: translate(-50%, -50%);
+  border-radius: 7% 7% 2% 2%;
+  box-shadow:
+    0 0 0 180vmax rgba(3, 8, 18, var(--entry-shadow-opacity)),
+    inset 0 0 42px rgba(0, 0, 0, var(--entry-inset-opacity));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.entry-transition-building-entering .entry-doorway-shadow {
+  opacity: 1;
+}
+
+@keyframes entryBuildingRideIn {
+  0% {
+    opacity: 0.35;
+    transform: translateY(12%) scale(1.2);
+    filter: blur(1.5px) saturate(0.96);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translateY(2.5%) scale(1.06);
+    filter: blur(0.4px) saturate(1);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0) saturate(1.02);
+  }
+}
+
+.entry-speed-glow,
+.entry-tunnel-darkness,
+.entry-inside-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.entry-speed-glow {
+  opacity: var(--entry-speed-opacity);
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(ellipse 18% 32% at 50% 58%, rgba(255, 255, 255, 0.72), transparent 62%),
+    radial-gradient(ellipse 42% 70% at 50% 58%, transparent 26%, rgba(255, 255, 255, 0.26) 49%, transparent 76%),
+    linear-gradient(90deg, transparent 0 18%, rgba(255, 255, 255, 0.2) 32%, transparent 46% 54%, rgba(255, 255, 255, 0.18) 68%, transparent 82% 100%);
+  filter: blur(14px);
+}
+
+.entry-tunnel-darkness {
+  opacity: var(--entry-tunnel-opacity);
+  background:
+    radial-gradient(ellipse 30% 42% at 50% 58%, transparent 0 34%, rgba(0, 0, 0, 0.42) 53%, rgba(0, 0, 0, 0.92) 82%),
+    radial-gradient(ellipse 115% 135% at 50% 58%, transparent 0 24%, rgba(0, 0, 0, 0.82) 78%, #000 100%);
+  backdrop-filter: blur(1px);
+}
+
+.entry-inside-flash {
+  opacity: var(--entry-flash-opacity);
+  background:
+    radial-gradient(circle at 50% 55%, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.64) 32%, rgba(247, 251, 255, 0.18) 58%, transparent 78%);
 }
 
 .entry-transition-logo {
@@ -515,6 +618,7 @@ button {
   height: auto;
   object-fit: contain;
   pointer-events: none;
+  opacity: var(--entry-chrome-opacity, 1);
 }
 
 .entry-transition-title {
@@ -529,6 +633,7 @@ button {
   font-weight: 700;
   white-space: nowrap;
   pointer-events: none;
+  opacity: var(--entry-chrome-opacity, 1);
 }
 
 @media (max-width: 900px) {
