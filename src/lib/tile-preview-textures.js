@@ -1,10 +1,10 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
-export const TILE_PREVIEW_BACK_LINE_1 = 'Thank you for working with us';
+export const TILE_PREVIEW_BACK_LINE_1 = "Thank you for working with us";
 export const TILE_PREVIEW_BACK_LINE_2 = "Let's take a look back";
 
-const CERAMIC_FILL = '#fff8ee';
-const TEXT_BLUE = '#1759bb';
+const CERAMIC_FILL = "#fff8ee";
+const TEXT_BLUE = "#1759bb";
 
 /**
  * @param {THREE.Texture} texture
@@ -72,21 +72,21 @@ function drawCenteredLines(ctx, lines, size, fontSize, lineHeight) {
  */
 export function createTileFrontTexture(text, renderer) {
   const size = 1024;
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
 
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext("2d");
   if (!ctx) {
-    throw new Error('Canvas 2D context niet beschikbaar.');
+    throw new Error("Canvas 2D context niet beschikbaar.");
   }
 
   ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
+  ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = CERAMIC_FILL;
   ctx.fillRect(0, 0, size, size);
 
-  const display = text.trim() || 'Jouw tegel';
+  const display = text.trim() || "Jouw tegel";
   const padding = size * 0.1;
   const maxWidth = size - padding * 2;
   const fontSize = Math.min(
@@ -96,8 +96,8 @@ export function createTileFrontTexture(text, renderer) {
   const lineHeight = fontSize * 1.32;
 
   ctx.fillStyle = TEXT_BLUE;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
   ctx.font = `600 ${fontSize}px "Playfair Display", Georgia, serif`;
 
   const lines = wrapCanvasText(ctx, display, maxWidth);
@@ -109,21 +109,23 @@ export function createTileFrontTexture(text, renderer) {
 
 /**
  * @param {THREE.WebGLRenderer} renderer
+ * @param {{ year?: string }} [options]
  * @returns {THREE.CanvasTexture}
  */
-export function createTileBackTexture(renderer) {
+export function createTileBackTexture(renderer, options = {}) {
+  const { year } = options;
   const size = 1024;
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
 
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext("2d");
   if (!ctx) {
-    throw new Error('Canvas 2D context niet beschikbaar.');
+    throw new Error("Canvas 2D context niet beschikbaar.");
   }
 
   ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
+  ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = CERAMIC_FILL;
   ctx.fillRect(0, 0, size, size);
 
@@ -131,8 +133,8 @@ export function createTileBackTexture(renderer) {
   const maxWidth = size - padding * 2;
 
   ctx.fillStyle = TEXT_BLUE;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
 
   const titleSize = 52;
   const subtitleSize = 44;
@@ -144,10 +146,15 @@ export function createTileBackTexture(renderer) {
 
   const titleLineHeight = titleSize * 1.28;
   const subtitleLineHeight = subtitleSize * 1.28;
+  const yearLabel = year ? String(year).trim() : "";
+  const yearSize = 56;
+  const yearGap = size * 0.08;
+  const yearBlockHeight = yearLabel ? yearGap + yearSize * 1.2 : 0;
   const blockHeight =
     line1.length * titleLineHeight +
     size * 0.06 +
-    line2.length * subtitleLineHeight;
+    line2.length * subtitleLineHeight +
+    yearBlockHeight;
 
   let y = size / 2 - blockHeight / 2 + titleLineHeight / 2;
 
@@ -162,6 +169,12 @@ export function createTileBackTexture(renderer) {
   for (const ln of line2) {
     ctx.fillText(ln, size / 2, y);
     y += subtitleLineHeight;
+  }
+
+  if (yearLabel) {
+    y += yearGap - subtitleLineHeight / 2 + yearSize / 2;
+    ctx.font = `700 ${yearSize}px "Playfair Display", Georgia, serif`;
+    ctx.fillText(yearLabel, size / 2, y);
   }
 
   const texture = new THREE.CanvasTexture(canvas);

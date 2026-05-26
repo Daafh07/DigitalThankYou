@@ -28,6 +28,7 @@ const PLACEHOLDER_COLOR = "#fff8ee";
  *   frontText?: string;
  *   logoBlueDataUrl?: string | null;
  *   tileFrontDataUrl?: string | null;
+ *   backYear?: string | null;
  *   isGenerating?: boolean;
  * }} props
  */
@@ -35,6 +36,7 @@ function TilePreviewMesh({
   frontText = "",
   logoBlueDataUrl = null,
   tileFrontDataUrl = null,
+  backYear = null,
   isGenerating = false,
 }) {
   const { gl } = useThree();
@@ -46,11 +48,13 @@ function TilePreviewMesh({
   const useComposedFront = Boolean(tileFrontDataUrl || logoBlueDataUrl);
 
   const textFrontMap = useMemo(
-    () =>
-      useComposedFront ? null : createTileFrontTexture(frontText, gl),
+    () => (useComposedFront ? null : createTileFrontTexture(frontText, gl)),
     [frontText, gl, useComposedFront],
   );
-  const backMap = useMemo(() => createTileBackTexture(gl), [gl]);
+  const backMap = useMemo(
+    () => createTileBackTexture(gl, { year: backYear ?? undefined }),
+    [gl, backYear],
+  );
 
   const placeholderMaterial = useMemo(
     () =>
@@ -188,6 +192,7 @@ function configureSide(texture, renderer) {
  *   frontText?: string;
  *   logoBlueDataUrl?: string | null;
  *   tileFrontDataUrl?: string | null;
+ *   backYear?: string | null;
  *   isGenerating?: boolean;
  *   className?: string;
  * }} props
@@ -196,6 +201,7 @@ export default function TilePreview3D({
   frontText = "",
   logoBlueDataUrl = null,
   tileFrontDataUrl = null,
+  backYear = null,
   isGenerating = false,
   className = "",
 }) {
@@ -223,6 +229,7 @@ export default function TilePreview3D({
               frontText={frontText}
               logoBlueDataUrl={logoBlueDataUrl}
               tileFrontDataUrl={tileFrontDataUrl}
+              backYear={backYear}
               isGenerating={isGenerating}
             />
           </Suspense>

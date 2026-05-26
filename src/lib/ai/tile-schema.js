@@ -25,6 +25,7 @@
  * @property {string} [tileTexture] — samengesteld voorvlak (emptytile + logo)
  * @property {string} [buttonText]
  * @property {TileStyle} [style]
+ * @property {import('@/lib/tile-year').TileYear} [year] — jaartal op de achterkant van de tegel
  * @property {number} createdAt
  */
 
@@ -32,11 +33,8 @@ const VALID_THEMES = new Set(["dark", "light"]);
 const VALID_ACCENTS = new Set(["blue", "green", "purple", "amber", "rose"]);
 const VALID_SIZES = new Set(["small", "medium", "large"]);
 
-/** System prompt die de LLM dwingt uitsluitend geldige JSON te retourneren. */
-export const TILE_SYSTEM_PROMPT = `Je bent een UI-generator voor een digitale workspace.
-Je antwoordt ALLEEN met een enkel JSON-object — geen markdown, geen uitleg, geen codeblokken.
-
-Het JSON-object moet exact deze structuur volgen:
+/** JSON-structuur voor het LLM-antwoord (gedragsregels staan in lm-studio.js). */
+export const TILE_JSON_SCHEMA = `Het JSON-object moet exact deze structuur volgen:
 {
   "title": "string (verplicht, korte titel)",
   "subtitle": "string (optioneel)",
@@ -48,15 +46,7 @@ Het JSON-object moet exact deze structuur volgen:
     "accent": "blue | green | purple | amber | rose",
     "size": "small | medium | large"
   }
-}
-
-Regels:
-- Geef NOOIT tekst buiten het JSON-object.
-- title is altijd verplicht en beschrijvend.
-- Kies style.theme, style.accent en style.size passend bij de gebruikersprompt.
-- Gebruik bestaande asset-paden indien een afbeelding nodig is: /assets/figma/livewall-room.png, /assets/figma/newLogo.svg, /assets/figma/interstitial-building.png
-- Als de gebruiker een logo heeft geüpload: focus op titel en beschrijving; het logo staat al op de tegel in Delft-blauw.
-- Schrijf in het Nederlands tenzij de gebruiker een andere taal vraagt.`;
+}`;
 
 const LOGO_TILE_USER_PREFIX =
   "De gebruiker heeft een logo geüpload dat al in Delft-blauw op de tegel staat. ";
@@ -190,17 +180,17 @@ export function attachLogoAssetsToTile(payload, assets) {
  * @param {{ prompt?: string; fileName?: string }} options
  * @returns {Omit<GeneratedTileData, 'id' | 'createdAt'>}
  */
-export function createLogoTileFallback({ prompt = '', fileName = '' } = {}) {
+export function createLogoTileFallback({ prompt = "", fileName = "" } = {}) {
   const trimmed = prompt.trim();
-  const fromFile = fileName.replace(/\.[^.]+$/, '').trim();
-  const title = trimmed || fromFile || 'Partner tegel';
+  const fromFile = fileName.replace(/\.[^.]+$/, "").trim();
+  const title = trimmed || fromFile || "Partner tegel";
 
   return normalizeTilePayload({
     title: title.length > 48 ? `${title.slice(0, 45)}…` : title,
-    subtitle: 'Digital Thank You',
+    subtitle: "Digital Thank You",
     description: trimmed
       ? undefined
-      : 'Bedankt voor jullie partnership — jullie staan op de muur.',
-    style: { theme: 'dark', accent: 'blue', size: 'medium' },
+      : "Bedankt voor jullie partnership — jullie staan op de muur.",
+    style: { theme: "dark", accent: "blue", size: "medium" },
   });
 }
