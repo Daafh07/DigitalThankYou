@@ -677,7 +677,7 @@ export default function HeroScene({
 
     const flightDuration        = 3.15; // seconden voor de invoegvlucht
     const introDelay            = 5;    // seconden wachten voor de intro-animatie start
-    const introAnimationDuration = 7.1; // seconden voor de volledige intro-animatie
+    const introAnimationDuration = 4.8; // seconden voor de volledige intro-animatie
     const introDuration         = introDelay + introAnimationDuration;
 
     // Pointer/drag-tracking.
@@ -1050,7 +1050,7 @@ export default function HeroScene({
 
       if (startWallEntranceRef.current && !wallEntranceActive && !wallEntranceComplete) {
         wallEntranceActive    = true;
-        wallEntranceStartedAt = elapsed + 0.08; // kleine vertraging voor rust
+        wallEntranceStartedAt = elapsed + 0.03; // kleine vertraging voor rust
         wallGroup.visible     = true;
         floatingTile.visible  = true;
         emptyMaterial.opacity = blankMaterial.opacity = ritualsMaterial.opacity = burgerkingMaterial.opacity = 1;
@@ -1060,7 +1060,7 @@ export default function HeroScene({
       }
 
       const wallEntranceElapsed = wallEntranceActive || wallEntranceComplete ? elapsed - wallEntranceStartedAt : -1;
-      if (wallEntranceActive && wallEntranceElapsed > 7.0) {
+      if (wallEntranceActive && wallEntranceElapsed > 4.8) {
         wallEntranceActive   = false;
         wallEntranceComplete = true;
         layoutTiles();
@@ -1071,10 +1071,10 @@ export default function HeroScene({
 
       if (introActive && !startIntroRef.current && floatingTile.visible && wallEntranceComplete) {
         if (glowStartTime < 0) glowStartTime = elapsed;
-        const fadeIn  = THREE.MathUtils.clamp((elapsed - glowStartTime) / 1.0, 0, 1);
-        const breathe = (Math.sin(elapsed * 1.1 - Math.PI / 2) + 1) / 2; // sinus → [0, 1]
-        idleGlowMaterial.opacity = fadeIn * (0.25 + breathe * 0.6);
-        idleGlow.scale.setScalar(3.0 + breathe * 2.5);
+        const fadeIn  = THREE.MathUtils.clamp((elapsed - glowStartTime) / 0.7, 0, 1);
+        const breathe = (Math.sin(elapsed * 0.9 - Math.PI / 2) + 1) / 2;
+        idleGlowMaterial.opacity = fadeIn * (0.14 + breathe * 0.18);
+        idleGlow.scale.setScalar(2.8 + breathe * 0.9);
         revealRays.forEach((r) => { r.visible = false; });
       }
 
@@ -1124,7 +1124,7 @@ export default function HeroScene({
           onFocusOverlayChange?.(true); // vignet-overlay aanzetten tijdens de vlucht
         }
 
-        setRevealStageLight(lightT > 0.08 && introT < 0.96);
+        setRevealStageLight(false);
 
         // Merkafbeelding (voor-vlak) en achterkant fade in.
         floatingMaterials[4].opacity = smootherStep(revealT);

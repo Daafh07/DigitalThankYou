@@ -5,17 +5,30 @@ import { useEffect, useRef } from 'react';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // Pad naar het 3D-gebouwmodel dat getoond wordt tijdens de ingangsanimatie.
-const MODEL_PATH = '/assets/models/buildings/Livewall-gebouw.glb';
+const BUILDING_MODEL_PATH = '/assets/models/Livewall-gebouw.glb';
+
+// Timing van de ingangsscène: een aaneengesloten beweging van buiten naar binnen.
+const WALK_IN_DURATION = 6800;
+const INSIDE_REVEAL_AT = 0.34;
+
+// Camerapunten voor de zweefbeweging naar het gebouw toe.
+const CAMERA_START = { x: 0, y: 0.16, z: 5.75 };
+const CAMERA_DOOR  = { x: 0, y: -0.90, z: 1.18 };
+const CAMERA_INSIDE = { x: 0, y: -0.90, z: 1.18 };
+
+const LOOK_START = { x: 0, y: -0.34, z: 0 };
+const LOOK_DOOR  = { x: 0, y: -0.52, z: -0.58 };
+const LOOK_INSIDE = { x: 0, y: -0.52, z: -0.58 };
 
 // ─── Module-level preload cache ───────────────────────────────────────────────
 
 // Deze variabelen worden gedeeld over alle instanties van de component,
 // zodat het model maximaal één keer per paginalading opgehaald wordt.
-// preloadPromise    – de lopende fetch+parse belofte, zodat parallelle aanroepen
-//                    niet elk een eigen verzoek starten.
-// preloadedScene    – het al verwerkte Three.js-sceneobject; klaar om te hergebruiken.
-let preloadPromise = null;
-let preloadedScene = null;
+// preloadPromises – lopende fetch+parse beloftes per modelpad, zodat parallelle
+//                   aanroepen niet elk een eigen verzoek starten.
+// preloadedScenes – verwerkte Three.js-sceneobjecten per modelpad; klaar om te klonen.
+const preloadPromises = new Map();
+const preloadedScenes = new Map();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -56,23 +69,40 @@ function normalizeMaterials(scene, THREE) {
  * zodat er nooit twee parallelle netwerkverzoeken plaatsvinden.
  */
 export async function preloadEntryBuildingModel() {
-  if (preloadedScene)  return preloadedScene;
-  if (preloadPromise)  return preloadPromise;
+  return preloadModel(BUILDING_MODEL_PATH);
+}
 
-  preloadPromise = Promise.all([
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2;
+}
+
+function easeOutQuint(t) {
+  return 1 - ((1 - t) ** 5);
+}
+
+function lerp(a, b, t) {
+  return a + ((b - a) * t);
+}
+
+async function preloadModel(path) {
+  if (preloadedScenes.has(path)) return preloadedScenes.get(path);
+  if (preloadPromises.has(path)) return preloadPromises.get(path);
+
+  const promise = Promise.all([
     import('three'),
     import('three/examples/jsm/loaders/GLTFLoader.js'),
   ])
     .then(async ([THREE, { GLTFLoader }]) => {
       // Laad en parse het GLB-bestand; normaliseer daarna de materialen.
-      const gltf = await new GLTFLoader().loadAsync(MODEL_PATH);
+      const gltf = await new GLTFLoader().loadAsync(path);
       normalizeMaterials(gltf.scene, THREE);
-      preloadedScene = gltf.scene;
-      return preloadedScene;
+      preloadedScenes.set(path, gltf.scene);
+      return gltf.scene;
     })
     .catch(() => null); // bij een fout null teruggeven zodat de component graceful degradeert
 
-  return preloadPromise;
+  preloadPromises.set(path, promise);
+  return promise;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -85,7 +115,7 @@ export async function preloadEntryBuildingModel() {
  * De complete Three.js-lifecycle (opbouw, animatielus en afbraak) wordt beheerd
  * binnen één useEffect zodat er geen state-lekken optreden bij unmounting.
  */
-export default function EntryBuildingModel({ onReady } = {}) {
+export default function EntryBuildingModel({ onReady, onInsideReached, onComplete } = {}) {
   const hostRef = useRef(null);
 
   useEffect(() => {
@@ -98,27 +128,21 @@ export default function EntryBuildingModel({ onReady } = {}) {
     let renderer      = null;
     let camera        = null;
     let buildingModel = null;
+    let walkTimer     = 0;
+    let walkStartTime = null;
     let frameId       = 0;
     let disposed      = false; // voorkomt setState na unmount
     let looping       = true;  // zet op false om de animatielus te stoppen
+    let insideNotified = false;
+    let completionNotified = false;
 
     // ── Dispose helpers ──────────────────────────────────────────────────────
 
     // Verwijdert het gebouwmodel uit de scène en geeft alle GPU-geheugen vrij
     // (geometrieën, texturen en materialen).
-    const disposeModel = () => {
+    const removeBuildingModel = () => {
       if (!buildingModel || !scene) return;
       scene.remove(buildingModel);
-      buildingModel.traverse((node) => {
-        if (!node.isMesh) return;
-        node.geometry?.dispose();
-        const mats = Array.isArray(node.material) ? node.material : [node.material];
-        mats.forEach((mat) => {
-          // Geef alle texturen in het materiaal vrij.
-          Object.values(mat).forEach((v) => { if (v?.isTexture) v.dispose(); });
-          mat.dispose();
-        });
-      });
       buildingModel = null;
     };
 
@@ -148,8 +172,8 @@ export default function EntryBuildingModel({ onReady } = {}) {
 
       // Perspectiefcamera die het gebouw enigszins van voren en iets boven-middel toont.
       camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
-      camera.position.set(0, 0.55, 5.4);
-      camera.lookAt(0, 0, 0);
+      camera.position.set(CAMERA_START.x, CAMERA_START.y, CAMERA_START.z);
+      camera.lookAt(LOOK_START.x, LOOK_START.y, LOOK_START.z);
 
       // ── Lights ──────────────────────────────────────────────────────────────
 
@@ -172,8 +196,58 @@ export default function EntryBuildingModel({ onReady } = {}) {
       const render = () => renderer.render(scene, camera);
 
       // Animatielus: rendert continu frames zolang looping true is.
-      const animate = () => {
+      const animate = (now) => {
         if (!looping) return;
+        if (walkStartTime !== null) {
+          const progress = Math.min(1, (now - walkStartTime) / WALK_IN_DURATION);
+          const doorPhase = Math.min(1, progress / 0.54);
+          const insidePhase = Math.max(0, (progress - 0.44) / 0.56);
+          const approach = easeInOutCubic(doorPhase);
+          const interior = easeInOutCubic(insidePhase);
+          const settle = 1 - progress;
+          const bob = Math.sin(progress * Math.PI * 2.2) * 0.045 * settle;
+          const driftX = Math.sin(progress * Math.PI * 1.15) * 0.055 * settle;
+          const doorX = lerp(CAMERA_START.x, CAMERA_DOOR.x, approach);
+          const doorY = lerp(CAMERA_START.y, CAMERA_DOOR.y, approach);
+          const doorZ = lerp(CAMERA_START.z, CAMERA_DOOR.z, approach);
+          const cameraX = lerp(doorX, CAMERA_INSIDE.x, interior) + driftX;
+          const cameraY = lerp(doorY, CAMERA_INSIDE.y, interior) + bob;
+          const cameraZ = lerp(doorZ, CAMERA_INSIDE.z, interior);
+          const lookDoorX = lerp(LOOK_START.x, LOOK_DOOR.x, approach);
+          const lookDoorY = lerp(LOOK_START.y, LOOK_DOOR.y, approach);
+          const lookDoorZ = lerp(LOOK_START.z, LOOK_DOOR.z, approach);
+          const lookX = lerp(lookDoorX, LOOK_INSIDE.x, interior) + (driftX * 0.18);
+          const lookY = lerp(lookDoorY, LOOK_INSIDE.y, interior);
+          const lookZ = lerp(lookDoorZ, LOOK_INSIDE.z, interior);
+          const doorFocus = easeInOutCubic(Math.min(1, progress / 0.42));
+          const shadowOpacity = Math.min(0.84, Math.sin(progress * Math.PI) * 0.72);
+
+          camera.position.set(cameraX, cameraY, cameraZ);
+          camera.lookAt(lookX, lookY, lookZ);
+          camera.fov = lerp(32, 50, approach);
+          camera.updateProjectionMatrix();
+          host.style.setProperty('--entry-door-width', `${7 + (doorFocus * 172)}%`);
+          host.style.setProperty('--entry-door-height', `${20 + (doorFocus * 168)}%`);
+          host.style.setProperty('--entry-shadow-opacity', shadowOpacity.toFixed(4));
+          host.style.setProperty('--entry-inset-opacity', (shadowOpacity * 0.42).toFixed(4));
+          host.style.setProperty('--entry-canvas-scale', (1 + (approach * 0.06)).toFixed(4));
+          host.style.setProperty('--entry-canvas-opacity', '1');
+          host.style.setProperty('--entry-speed-opacity', '0');
+          host.style.setProperty('--entry-flash-opacity', '0');
+          host.style.setProperty('--entry-chrome-opacity', (1 - Math.min(1, progress * 1.35)).toFixed(4));
+
+          if (!insideNotified && progress >= INSIDE_REVEAL_AT) {
+            insideNotified = true;
+            host.classList.add('entry-transition-building-inside');
+            onInsideReached?.();
+          }
+
+          if (!completionNotified && progress >= 1) {
+            completionNotified = true;
+            host.classList.add('entry-transition-building-complete');
+            onComplete?.();
+          }
+        }
         render();
         frameId = window.requestAnimationFrame(animate);
       };
@@ -215,6 +289,7 @@ export default function EntryBuildingModel({ onReady } = {}) {
         model.position.x = 0;
         model.position.z = 0;
         render();
+
       };
 
       /**
@@ -223,26 +298,41 @@ export default function EntryBuildingModel({ onReady } = {}) {
        */
       const showBuilding = (model) => {
         if (disposed || !model) return;
+        removeBuildingModel();
         buildingModel = model;
         scene.add(buildingModel);
         fitModel(buildingModel);
-        // requestAnimationFrame zorgt dat onReady pas afgaat nà de eerste render.
-        window.requestAnimationFrame(() => { render(); onReady?.(); });
+        render();
       };
 
       // ── Load (prefer the preloaded cache) ────────────────────────────────────
 
-      // Gebruik het al geladen model als dat beschikbaar is; laad anders opnieuw.
-      preloadEntryBuildingModel().then((cached) => {
+      // Toon het gebouw zodra het model klaar is.
+      preloadEntryBuildingModel().then((loadedBuildingModel) => {
         if (disposed) return;
-        if (cached) { showBuilding(cached); return; }
+        if (loadedBuildingModel) {
+          showBuilding(loadedBuildingModel.clone(true));
+
+          // requestAnimationFrame zorgt dat onReady pas afgaat nà de eerste render.
+          window.requestAnimationFrame(() => { render(); onReady?.(); });
+
+          walkTimer = window.requestAnimationFrame(() => {
+            if (!disposed) {
+              walkStartTime = performance.now();
+              host.classList.add('entry-transition-building-entering');
+            }
+          });
+
+          return;
+        }
 
         // Fallback: laad het model direct als de preload om een of andere reden mislukt.
-        new GLTFLoader().load(MODEL_PATH, (gltf) => {
+        new GLTFLoader().load(BUILDING_MODEL_PATH, (gltf) => {
           if (disposed) return;
           normalizeMaterials(gltf.scene, THREE);
-          preloadedScene = gltf.scene;
-          showBuilding(preloadedScene);
+          preloadedScenes.set(BUILDING_MODEL_PATH, gltf.scene);
+          showBuilding(gltf.scene.clone(true));
+          window.requestAnimationFrame(() => { render(); onReady?.(); });
         }, undefined, () => render());
       });
 
@@ -267,9 +357,22 @@ export default function EntryBuildingModel({ onReady } = {}) {
     return () => {
       disposed = true;
       looping  = false;
+      window.cancelAnimationFrame(walkTimer);
       window.cancelAnimationFrame(frameId);
+      host.classList.remove('entry-transition-building-entering');
+      host.classList.remove('entry-transition-building-inside');
+      host.classList.remove('entry-transition-building-complete');
+      host.style.removeProperty('--entry-door-width');
+      host.style.removeProperty('--entry-door-height');
+      host.style.removeProperty('--entry-shadow-opacity');
+      host.style.removeProperty('--entry-inset-opacity');
+      host.style.removeProperty('--entry-canvas-scale');
+      host.style.removeProperty('--entry-canvas-opacity');
+      host.style.removeProperty('--entry-speed-opacity');
+      host.style.removeProperty('--entry-flash-opacity');
+      host.style.removeProperty('--entry-chrome-opacity');
       cleanupResize?.();
-      disposeModel();
+      removeBuildingModel();
       renderer?.dispose();
       if (renderer?.domElement && host.contains(renderer.domElement)) {
         host.removeChild(renderer.domElement);
@@ -277,5 +380,11 @@ export default function EntryBuildingModel({ onReady } = {}) {
     };
   }, [onReady]);
 
-  return <div ref={hostRef} className="entry-transition-building-3d" aria-hidden="true" />;
+  return (
+    <div ref={hostRef} className="entry-transition-building-3d" aria-hidden="true">
+      <div className="entry-doorway-shadow" />
+      <div className="entry-speed-glow" />
+      <div className="entry-inside-flash" />
+    </div>
+  );
 }

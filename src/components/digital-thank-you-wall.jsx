@@ -15,10 +15,7 @@ import LoadingAnimation from './loading-animation';
 const CACHE_VERSION = 'v3';
 
 const LOADING_BACKGROUND       = `/assets/figma/achtergrondloading.svg?${CACHE_VERSION}`;
-const ENTRY_BUILDING_MODEL     = '/assets/models/buildings/Livewall-gebouw.glb';
-
-// Hoe lang de gebouw-ingangsanimatie duurt voordat de muur zichtbaar wordt (ms).
-const ENTRY_TRANSITION_DURATION = 4200;
+const ENTRY_BUILDING_MODEL     = '/assets/models/Livewall-gebouw.glb';
 
 // Nooddata als partners.json niet laadbaar is (bijv. offline of tijdens ontwikkeling).
 const FALLBACK_PARTNERS = [
@@ -45,7 +42,7 @@ function loadImage(src) {
 // Haalt het 3D-gebouwmodel op en slaat het op in de browsercache.
 // Three.js kan het daarna direct uit de cache lezen zonder extra netwerkverzoek.
 function loadModel(src) {
-  return fetch(src, { cache: 'force-cache' }).then((res) => res.blob()).catch(() => null);
+  return fetch(src, { cache: 'no-store' }).then((res) => res.blob()).catch(() => null);
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -67,7 +64,7 @@ export default function DigitalThankYouWall() {
   // Staat voor de gebouw-ingangsanimatie (de scène waarbij je "naar binnen loopt").
   const [entryTransitionVisible, setEntryTransitionVisible] = useState(false);
   const [entryTransitionDone,    setEntryTransitionDone]    = useState(false);
-  const [entryBuildingReady,     setEntryBuildingReady]     = useState(false);
+  const [entryTransitionFading,  setEntryTransitionFading]   = useState(false);
   const [buildingEntered,        setBuildingEntered]        = useState(false);
 
   // Staat voor de muurscène zelf.
@@ -111,7 +108,17 @@ export default function DigitalThankYouWall() {
   // Stabiele callbacks zodat onderliggende componenten niet onnodig opnieuw renderen.
   const handleSceneReady          = useCallback(() => setSceneReady(true),         []);
   const handleLoadingComplete     = useCallback(() => setMinimumTimePassed(true),  []);
-  const handleEntryBuildingReady  = useCallback(() => setEntryBuildingReady(true), []);
+  const handleEntryBuildingInsideReached = useCallback(() => {
+    setBuildingEntered(true);
+    setFocusOverlayVisible(false);
+    setRevealLightVisible(false);
+    setEntryTransitionFading(true);
+  }, []);
+  const handleEntryTransitionComplete = useCallback(() => {
+    setEntryTransitionDone(true);
+    setEntryTransitionVisible(false);
+    setEntryTransitionFading(false);
+  }, []);
 
   // Alle drie de poorten zijn open → het laadscherm mag weg.
   const loadingComplete = assetsReady && sceneReady && minimumTimePassed;
@@ -121,26 +128,9 @@ export default function DigitalThankYouWall() {
   useEffect(() => {
     if (!loadingComplete || entryTransitionDone) return undefined;
 
-    setEntryBuildingReady(false);  // reset de ready-vlag zodat het 3D-gebouw opnieuw inlaadt
     setEntryTransitionVisible(true);
     return undefined;
   }, [entryTransitionDone, loadingComplete]);
-
-  // Start de timer zodra het 3D-gebouw zijn eerste frame heeft getekend.
-  // Na ENTRY_TRANSITION_DURATION ms gaan we door naar de muurscène.
-  useEffect(() => {
-    if (!entryTransitionVisible || !entryBuildingReady || entryTransitionDone) return undefined;
-
-    const timer = window.setTimeout(() => {
-      setEntryTransitionDone(true);
-      setEntryTransitionVisible(false);
-      setBuildingEntered(true);     // dit maakt de muur zichtbaar
-      setFocusOverlayVisible(false);
-      setRevealLightVisible(false);
-    }, ENTRY_TRANSITION_DURATION);
-
-    return () => window.clearTimeout(timer);
-  }, [entryBuildingReady, entryTransitionDone, entryTransitionVisible]);
 
   return (
     <main className="experience-shell">
@@ -189,13 +179,16 @@ export default function DigitalThankYouWall() {
           Wordt pas gemount als entryTransitionVisible true is, zodat Three.js
           niet onnodig draait terwijl het laadscherm nog zichtbaar is. */}
       <div
-        className={`entry-transition${entryTransitionVisible ? ' entry-transition-visible' : ''}`}
+        className={`entry-transition${entryTransitionVisible ? ' entry-transition-visible' : ''}${entryTransitionFading ? ' entry-transition-fading' : ''}`}
         aria-hidden={!entryTransitionVisible || entryTransitionDone}
       >
         <div className="entry-transition-frame">
           <img className="entry-transition-viewport-bg" src={LOADING_BACKGROUND} alt="" />
           {entryTransitionVisible && !entryTransitionDone && (
-            <EntryBuildingModel onReady={handleEntryBuildingReady} />
+            <EntryBuildingModel
+              onInsideReached={handleEntryBuildingInsideReached}
+              onComplete={handleEntryTransitionComplete}
+            />
           )}
           <img className="entry-transition-logo" src={`/assets/figma/newLogo.svg?${CACHE_VERSION}`} alt="" />
           <div className="entry-transition-title">Your Place on the Wall</div>
