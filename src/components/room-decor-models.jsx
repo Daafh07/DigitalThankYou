@@ -5,6 +5,8 @@ import { useEffect, useRef } from 'react';
 const PILLAR_MODEL = '/assets/models/decor/pillar.glb';
 const VASE_MODEL = '/assets/models/decor/vase.glb';
 const WINDOW_SILL_MODEL = '/assets/models/decor/vensterbank.glb';
+const GROOT_VAAS_RECHTS_MODEL = '/assets/models/decor/grootvaasrechts.glb';
+const GROOT_COMBI_VAAS_LINKS_MODEL = '/assets/models/decor/grootcombivaaslinks.glb';
 
 function normalizeModel(root, THREE, targetHeight) {
   const model = root.clone(true);
@@ -309,6 +311,8 @@ export default function RoomDecorModels({
     vasesVisibleRef.current = vasesVisible;
   }, [vasesVisible]);
 
+
+
   useEffect(() => {
     if (!active) return undefined;
 
@@ -327,6 +331,7 @@ export default function RoomDecorModels({
     let impactStartedAt = -1;
     const decorObjects = [];
     const vaseBenders = [];
+    const swayObjects = [];
 
     const disposeObject = (object) => {
       object.traverse((node) => {
@@ -379,25 +384,49 @@ export default function RoomDecorModels({
       fillLight.position.set(4, 2.5, 4);
       scene.add(fillLight);
 
+
       const loader = new GLTFLoader();
-      const [pillarGltf, vaseGltf, windowSillGltf] = await Promise.all([
+      const [pillarGltf, vaseGltf, windowSillGltf, grootVaasRechtsGltf, grootCombiVaasLinksGltf] = await Promise.all([
         loader.loadAsync(PILLAR_MODEL),
         loader.loadAsync(VASE_MODEL),
         loader.loadAsync(WINDOW_SILL_MODEL),
+        loader.loadAsync(GROOT_VAAS_RECHTS_MODEL),
+        loader.loadAsync(GROOT_COMBI_VAAS_LINKS_MODEL),
       ]);
       if (disposed) return;
 
-      const createWindowSill = ({ x, y, rotationY, rotationZ = 0, width = 2.45 }) => {
+      const sillObjects = [];
+      const createWindowSill = ({ x, y, rotationY, rotationZ = 0, width = 2.45, stretchX = 1, shakeDir = 1, shakeDelay = 0 }) => {
         const sill = normalizeModelByWidth(windowSillGltf.scene, THREE, width);
+        if (stretchX !== 1) sill.scale.x *= stretchX;
         sill.position.set(x, y, -0.12);
-        sill.rotation.set(0.12, rotationY, rotationZ);
+        sill.rotation.set(0.08, rotationY, rotationZ);
         sill.renderOrder = 1;
         scene.add(sill);
         decorObjects.push(sill);
+        sillObjects.push({ sill, baseRotX: 0.08, baseRotY: rotationY, shakeDir, shakeDelay });
       };
 
-      createWindowSill({ x: -6.88, y: -3.1, rotationY: 1.2, width: 4.35 });
-      createWindowSill({ x: 6.88, y: -3.1, rotationY: -1.2, width: 4.35 });
+      createWindowSill({ x: -6.9, y: -2.9, rotationY: 1.21, width: 3.5, stretchX: 1.35, shakeDir: -1, shakeDelay: 0.1 });
+      createWindowSill({ x: 6.8, y: -2.9, rotationY: -1.19, width: 3.5, shakeDir: 1, shakeDelay: 0.15 });
+
+      // grootvaasrechts op de rechter vensterbank, aan het uiteinde aan de voorkant
+      const grootVaasRechts = normalizeModel(grootVaasRechtsGltf.scene, THREE, 2.4);
+      grootVaasRechts.position.set(6.8, -0.7, 0.8);
+      grootVaasRechts.rotation.set(0.08, -1.19, 0);
+      grootVaasRechts.renderOrder = 2;
+      scene.add(grootVaasRechts);
+      decorObjects.push(grootVaasRechts);
+      swayObjects.push({ bender: prepareVaseBend(grootVaasRechts, THREE), direction: 1, delay: 0.35, anchor: grootVaasRechts, hover: 0 });
+
+      // grootcombivaaslinks op de linker vensterbank, aan het uiteinde aan de voorkant
+      const grootCombiVaasLinks = normalizeModel(grootCombiVaasLinksGltf.scene, THREE, 2.4);
+      grootCombiVaasLinks.position.set(-6.9, -0.7, 0.8);
+      grootCombiVaasLinks.rotation.set(0.08, -0.5, 0);
+      grootCombiVaasLinks.renderOrder = 2;
+      scene.add(grootCombiVaasLinks);
+      decorObjects.push(grootCombiVaasLinks);
+      swayObjects.push({ bender: prepareVaseBend(grootCombiVaasLinks, THREE), direction: -1, delay: 0.5, anchor: grootCombiVaasLinks, hover: 0 });
 
       const createDecorSet = ({ x, y, rotationY, scale = 1 }) => {
         const group = new THREE.Group();
@@ -510,6 +539,40 @@ export default function RoomDecorModels({
             bender.reveal.reset();
           }
         });
+
+        sillObjects.forEach(({ sill, baseRotX, baseRotY, shakeDir, shakeDelay }) => {
+          const localAge = impactAge - shakeDelay;
+          const shake = localAge > 0 && localAge < 1.2
+            ? Math.sin(localAge * 38) * Math.exp(-localAge * 5.5) * 0.006
+            : 0;
+          sill.rotation.x = baseRotX + shake;
+          sill.rotation.y = baseRotY + shakeDir * shake * 0.5;
+        });
+
+        swayObjects.forEach((entry) => {
+          const { bender, direction, delay, anchor } = entry;
+          const localAge = impactAge - delay;
+          const sway = localAge > 0 && localAge < 6.0
+            ? Math.sin(localAge * 6.5) * Math.exp(-localAge * 0.7) * 0.04
+            : 0;
+
+          let hoverTarget = 0;
+          if (impactSignalRef.current > 0 && visibleRef.current && pointer.active && rect.width > 0 && rect.height > 0 && anchor) {
+            anchor.getWorldPosition(projected);
+            projected.y += 0.95;
+            projected.project(camera);
+            const screenX = rect.left + (projected.x * 0.5 + 0.5) * rect.width;
+            const screenY = rect.top + (-projected.y * 0.5 + 0.5) * rect.height;
+            const distance = Math.hypot(pointer.x - screenX, pointer.y - screenY);
+            hoverTarget = Math.max(0, 1 - distance / 145);
+          }
+
+          entry.hover += (hoverTarget - entry.hover) * 0.12;
+          const hoverSway = Math.sin(now * 4.8) * entry.hover * 0.055;
+          bender.set(direction * (sway * 8.2 + hoverSway));
+        });
+
+
 
         renderer.render(scene, camera);
         frameId = window.requestAnimationFrame(animate);

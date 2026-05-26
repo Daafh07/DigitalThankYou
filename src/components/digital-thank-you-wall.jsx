@@ -187,18 +187,19 @@ export default function DigitalThankYouWall() {
       gsap.killTweensOf(el);
       if (hintSwapTimer.current) { hintSwapTimer.current.kill(); hintSwapTimer.current = null; }
 
+      el.classList.remove('tile-hint--small');
       revealHintText(el, 'Discover your tile');
 
       // Na 6s: fade out en swap naar de instructietekst
       hintSwapTimer.current = gsap.delayedCall(6, () => {
-        hideHintText(el, () => revealHintText(
-          el,
-          'Click on the wall to add your tile to the LiveWall,<br>or click "Let\'s take a look back" for a personalised experience',
-        ));
+        hideHintText(el, () => {
+          el.classList.add('tile-hint--small');
+          revealHintText(el, 'Click on the wall to add your tile to the LiveWall,<br>or click "Let\'s take a look back" for a personalised experience');
+        });
       });
     } else if (tileInserted) {
       if (hintSwapTimer.current) { hintSwapTimer.current.kill(); hintSwapTimer.current = null; }
-      hideHintText(el, () => revealHintText(el, 'Explore the tile wall'));
+      hideHintText(el, () => { el.classList.remove('tile-hint--small'); revealHintText(el, 'Explore the tile wall'); });
     }
 
     return () => {

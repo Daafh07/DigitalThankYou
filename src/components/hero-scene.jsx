@@ -1157,6 +1157,7 @@ export default function HeroScene({
     let extracting = false;
     let extractProgress = 0;
     let impactTime = null; // tijdstip van inslag (voor naeffecten)
+    let hasEverBeenInserted = false;
 
     // Toestandsvariabelen voor de intro-sequentie.
     let introProgress         = 0;
@@ -1649,7 +1650,7 @@ export default function HeroScene({
       }
 
       // Rotatie-pijlen: alleen in de vrij-fase (na intro, tegel groot voor camera, vóór insertie)
-      if (!introActive && !insertionStarted && !inserted && !extracting && floatingTile.visible) {
+      if (!introActive && !insertionStarted && !inserted && !extracting && !hasEverBeenInserted && floatingTile.visible) {
         if (arrowStartTime < 0) arrowStartTime = elapsed;
         const arrowElapsed = elapsed - arrowStartTime;
         const fadeIn = THREE.MathUtils.clamp(arrowElapsed / 1.2, 0, 1);
@@ -2046,6 +2047,7 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
       // Snap de ingevoegde toestand als de vlucht zijn eindpunt bereikt.
       if (insertionStarted && !extracting && !inserted && progress >= 1) {
         inserted = true;
+        hasEverBeenInserted = true;
         impactTime = elapsed;
         onTileImpact?.();
         onTileInserted?.();
