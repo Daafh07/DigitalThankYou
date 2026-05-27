@@ -20,7 +20,6 @@ import HeroScene from "./hero-scene";
 import LoadingAnimation from "./loading-animation";
 import RoomDecorModels from "./room-decor-models";
 import CodeActivationScene, {
-  preloadCodeActivationSceneModel,
 } from "./code-activation-scene";
 
 gsap.registerPlugin(SplitText);
@@ -125,7 +124,6 @@ export default function DigitalThankYouWall() {
   // Het model is zwaar (GLB), dus zo vroeg mogelijk beginnen bespaart wachttijd later.
   useEffect(() => {
     preloadEntryBuildingModel();
-    preloadCodeActivationSceneModel();
 
     fetch("/assets/data/partners.json")
       .then((res) => (res.ok ? res.json() : FALLBACK_PARTNERS))
@@ -150,7 +148,6 @@ export default function DigitalThankYouWall() {
       loadImage(`/assets/figma/codeActivationBg.png?${CACHE_VERSION}`),
       loadImage(LOADING_BACKGROUND),
       preloadEntryBuildingModel(),
-      preloadCodeActivationSceneModel(),
     ]).then(() => {
       if (!cancelled) setAssetsReady(true);
     });
@@ -314,6 +311,10 @@ export default function DigitalThankYouWall() {
   const handleWallEntranceComplete = useCallback(() => {
     /* muur is klaar, niets meer te doen */
   }, []);
+  const handleCodeActivationComplete = useCallback(
+    () => setCodeActivationSceneDone(true),
+    [],
+  );
   const handleIntroComplete = useCallback(() => setIntroComplete(true), []);
   const handleTileInserted = useCallback(() => {
     setTileInserted(true);
@@ -411,7 +412,6 @@ export default function DigitalThankYouWall() {
 
     activationToTileTimer.current = window.setTimeout(() => {
       setSceneTransitionCover("solid");
-      setTileBaseElementsReady(false);
       setCodeActivationSceneVisible(false);
       setBuildingEntered(true);
       setFocusOverlayVisible(false);
@@ -475,7 +475,7 @@ export default function DigitalThankYouWall() {
           alt=""
         />
         <RoomDecorModels
-          active={entryTransitionVisible || buildingEntered}
+          active={entryTransitionVisible || buildingEntered || codeActivationSceneVisible}
           visible={buildingEntered}
           vasesVisible={vasesVisible}
           impactSignal={decorImpactSignal}
@@ -596,7 +596,7 @@ export default function DigitalThankYouWall() {
       >
         {codeActivationSceneVisible && (
           <CodeActivationScene
-            onComplete={() => setCodeActivationSceneDone(true)}
+            onComplete={handleCodeActivationComplete}
           />
         )}
       </div>
