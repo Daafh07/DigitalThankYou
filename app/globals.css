@@ -245,6 +245,10 @@ button {
   width: 178.44%;
   height: 186.71%;
   pointer-events: auto;
+  transition:
+    opacity 1.2s ease,
+    filter 1.2s ease,
+    transform 1.2s ease;
 }
 
 .webgl-tile-wall--flying {
@@ -263,6 +267,565 @@ button {
   display: block;
   width: 100% !important;
   height: 100% !important;
+}
+
+.tile-lookback-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tile-lookback-cta {
+  position: absolute;
+  display: inline-grid;
+  min-width: clamp(118px, 13cqw, 184px);
+  min-height: clamp(30px, 4cqw, 42px);
+  place-items: center;
+  padding: 0.64rem 0.92rem;
+  border: 1px solid rgba(23, 89, 187, 0.28);
+  border-radius: 999px;
+  color: #1759bb;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(247, 242, 229, 0.9)),
+    rgba(255, 250, 239, 0.9);
+  box-shadow:
+    0 10px 24px rgba(5, 22, 56, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  font-size: clamp(10px, 1.35cqw, 14px);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+  transition:
+    background 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.tile-lookback-cta:hover {
+  color: #ffffff;
+  background: #1759bb;
+  box-shadow:
+    0 13px 30px rgba(5, 22, 56, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transform: translate(-50%, -50%) scale(1.025);
+}
+
+.tile-lookback-cta:focus-visible {
+  outline: 2px solid rgba(209, 161, 74, 0.95);
+  outline-offset: 3px;
+}
+
+.livewall-wall-scrolly .webgl-tile-wall {
+  pointer-events: none;
+  animation: tileWallMeltAway 2.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes tileWallMeltAway {
+  0% {
+    opacity: 1;
+    filter: blur(0) saturate(1) contrast(1);
+    transform: translateY(0) scale(1);
+  }
+
+  42% {
+    opacity: 0.72;
+    filter: blur(1.5px) saturate(0.95) contrast(1.02);
+    transform: translateY(0.8%) scale(1.006);
+  }
+
+  100% {
+    opacity: 0.16;
+    filter: blur(7px) saturate(0.62) contrast(0.94);
+    transform: translateY(3%) scale(1.022);
+  }
+}
+
+/* ─── Scrollytelling frame ─────────────────────────────────────────────────── */
+
+/* Frame container and background treatment for the scrollytelling overlay. */
+.tile-scrolly-frame {
+  container-type: size;
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  overflow: hidden;
+  border: 1px solid rgba(23, 89, 187, 0.28);
+  border-radius: 6px;
+  background:
+    linear-gradient(135deg, rgba(247, 251, 255, 0.96), rgba(255, 252, 244, 0.94)),
+    url("/assets/textures/keramiek.jpg");
+  background-size: cover;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.74),
+    inset 0 18px 36px rgba(255, 255, 255, 0.34),
+    inset 0 -22px 40px rgba(23, 89, 187, 0.12),
+    0 18px 46px rgba(4, 27, 68, 0.16);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: scale(0.982);
+  clip-path: inset(45% 48% 45% 48% round 6px);
+  isolation: isolate;
+}
+
+/* Ghost grid overlay that fades out during reveal. */
+.tile-scrolly-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent calc(10% - 1px),
+      rgba(23, 89, 187, 0.17) calc(10% - 1px),
+      rgba(23, 89, 187, 0.17) 10%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent calc(16.666% - 1px),
+      rgba(23, 89, 187, 0.14) calc(16.666% - 1px),
+      rgba(23, 89, 187, 0.14) 16.666%
+    );
+  mix-blend-mode: multiply;
+  animation: tileGridGhost 2.15s ease forwards;
+}
+
+.tile-scrolly-frame::after {
+  /* Inner glass edge highlight. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 26px rgba(6, 27, 64, 0.16),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.38);
+}
+
+.tile-scrolly-frame-active {
+  /* Reveal animation when scrollytelling becomes active. */
+  visibility: visible;
+  pointer-events: auto;
+  animation: scrollyFrameReveal 1.9s cubic-bezier(0.16, 1, 0.3, 1) 0.22s forwards;
+}
+
+.tile-scrolly-frame-returning {
+  /* Return animation when scrollytelling exits. */
+  pointer-events: none;
+  animation: scrollyFrameReturn 1.45s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+}
+
+@keyframes scrollyFrameReveal {
+  /* Expand and fade in the frame. */
+  0% {
+    opacity: 0;
+    transform: scale(0.982);
+    clip-path: inset(45% 48% 45% 48% round 6px);
+  }
+
+  64% {
+    opacity: 1;
+    transform: scale(1.012);
+    clip-path: inset(0 0 0 0 round 6px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    clip-path: inset(0 0 0 0 round 6px);
+  }
+}
+
+@keyframes scrollyFrameReturn {
+  /* Collapse and fade out the frame. */
+  0% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+    clip-path: inset(0 0 0 0 round 6px);
+  }
+
+  58% {
+    opacity: 0.74;
+    filter: blur(1.5px);
+    transform: scale(0.996);
+    clip-path: inset(8% 7% 8% 7% round 6px);
+  }
+
+  100% {
+    opacity: 0;
+    filter: blur(5px);
+    transform: scale(0.982);
+    clip-path: inset(46% 48% 46% 48% round 6px);
+  }
+}
+
+@keyframes tileGridGhost {
+  /* Fade out the grid overlay. */
+  0%,
+  42% {
+    opacity: 0.82;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+.tile-melt-veil {
+  /* Drip veil that passes over the frame on reveal. */
+  position: absolute;
+  inset: -1px;
+  z-index: 5;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(225, 238, 255, 0.72) 46%, rgba(255, 246, 220, 0.38)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(23, 89, 187, 0.13) 0,
+      rgba(23, 89, 187, 0.13) 1px,
+      transparent 1px,
+      transparent 10%
+    );
+  transform: translateY(-8%);
+  opacity: 0;
+}
+
+.tile-scrolly-frame-active .tile-melt-veil {
+  /* Trigger the veil pass on activation. */
+  animation: meltVeilPass 1.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.tile-melt-veil span {
+  /* Individual drip elements; positioned with CSS variables. */
+  position: absolute;
+  left: var(--drip-left);
+  top: -10%;
+  width: clamp(5px, 1.1cqw, 14px);
+  height: var(--drip-height);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(23, 89, 187, 0.2), rgba(209, 161, 74, 0));
+  filter: blur(1px);
+  opacity: 0;
+}
+
+.tile-scrolly-frame-active .tile-melt-veil span {
+  /* Animate individual drips on activation. */
+  animation: meltDrip 1.25s cubic-bezier(0.16, 1, 0.3, 1) var(--drip-delay) forwards;
+}
+
+@keyframes meltVeilPass {
+  /* Veil sweep animation. */
+  0% {
+    opacity: 0;
+    transform: translateY(-10%) scaleY(0.84);
+  }
+
+  22% {
+    opacity: 0.96;
+  }
+
+  72% {
+    opacity: 0.55;
+    transform: translateY(4%) scaleY(1.04);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(11%) scaleY(1.08);
+  }
+}
+
+@keyframes meltDrip {
+  /* Drip fall animation. */
+  0% {
+    opacity: 0;
+    transform: translateY(-18%) scaleY(0.6);
+  }
+
+  26% {
+    opacity: 0.74;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(130%) scaleY(1.18);
+  }
+}
+
+.tile-scrolly-viewport {
+  /* Crops the animated track. */
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.tile-scrolly-track {
+  /* Horizontal track that slides through panels. */
+  display: flex;
+  height: 100%;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+}
+
+.tile-scrolly-frame-active .tile-scrolly-track {
+  /* Auto-play the track based on JS-provided CSS vars. */
+  animation: tileStoryAutoplay var(--story-duration) linear var(--story-delay) forwards;
+}
+
+.tile-scrolly-frame-returning .tile-scrolly-track {
+  /* Freeze track while returning. */
+  animation-play-state: paused;
+}
+
+@keyframes tileStoryAutoplay {
+  /* Move the track from first to last panel. */
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(var(--story-end), 0, 0);
+  }
+}
+
+.tile-scrolly-panel {
+  /* Base layout for each panel (copy left, visuals right). */
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  min-width: 0;
+  height: 100%;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(14px, 4cqw, 38px);
+  padding: clamp(20px, 5.2cqw, 54px);
+  color: #143f7a;
+}
+
+.tile-scrolly-panel-intro {
+  /* Panel 1 background. */
+  background:
+    linear-gradient(110deg, rgba(255, 255, 255, 0.9), rgba(232, 242, 255, 0.68)),
+    linear-gradient(90deg, transparent 52%, rgba(209, 161, 74, 0.12));
+}
+
+.tile-scrolly-panel-partners {
+  /* Panel 2 background. */
+  background:
+    linear-gradient(130deg, rgba(248, 252, 255, 0.92), rgba(255, 250, 238, 0.82)),
+    linear-gradient(90deg, rgba(23, 89, 187, 0.08), transparent 42%, rgba(209, 161, 74, 0.12));
+}
+
+.tile-scrolly-panel-memory {
+  /* Panel 3 background and inverted text color. */
+  background:
+    linear-gradient(120deg, rgba(21, 75, 143, 0.95), rgba(9, 43, 91, 0.92)),
+    url("/assets/textures/keramiek.jpg");
+  color: #f7fbff;
+}
+
+.tile-scrolly-copy {
+  /* Copy column container. */
+  min-width: 0;
+  max-width: 34ch;
+}
+
+.tile-scrolly-copy span {
+  /* Kicker label. */
+  display: block;
+  margin-bottom: 0.78em;
+  color: rgba(209, 161, 74, 0.94);
+  font-size: clamp(0.66rem, 1.7cqw, 0.92rem);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.tile-scrolly-copy h2 {
+  /* Main panel title. */
+  margin: 0;
+  color: inherit;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(1.24rem, 4.5cqw, 2.9rem);
+  line-height: 0.98;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.tile-scrolly-copy p {
+  /* Body copy. */
+  margin: 1em 0 0;
+  color: rgba(20, 63, 122, 0.76);
+  font-size: clamp(0.78rem, 1.9cqw, 1.04rem);
+  line-height: 1.45;
+}
+
+.tile-scrolly-panel-memory .tile-scrolly-copy p {
+  /* Body copy color override for dark panel. */
+  color: rgba(247, 251, 255, 0.78);
+}
+
+.tile-scrolly-hero-stack {
+  /* Panel 1 image stack container. */
+  position: relative;
+  width: min(100%, 54cqw);
+  aspect-ratio: 1.18;
+  justify-self: center;
+}
+
+.tile-scrolly-hero-stack img {
+  /* Shared image styling in the stack. */
+  position: absolute;
+  width: 42%;
+  aspect-ratio: 79 / 82;
+  object-fit: cover;
+  border-radius: 4px;
+  box-shadow: 0 16px 34px rgba(8, 35, 81, 0.18);
+}
+
+.tile-scrolly-hero-stack img:nth-child(1) {
+  /* Foreground image placement. */
+  left: 27%;
+  top: 6%;
+  z-index: 3;
+  width: 48%;
+  transform: rotate(-1deg);
+}
+
+.tile-scrolly-hero-stack img:nth-child(2) {
+  /* Mid image placement. */
+  left: 4%;
+  top: 30%;
+  z-index: 2;
+  transform: rotate(-8deg);
+}
+
+.tile-scrolly-hero-stack img:nth-child(3) {
+  /* Back image placement. */
+  right: 3%;
+  top: 35%;
+  z-index: 1;
+  transform: rotate(7deg);
+}
+
+.tile-scrolly-partner-grid {
+  /* Panel 2 grid of partner tiles. */
+  display: grid;
+  width: min(100%, 50cqw);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(6px, 1.6cqw, 12px);
+  justify-self: center;
+}
+
+.tile-scrolly-partner-tile {
+  /* Individual partner tile container. */
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 79 / 82;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 10px 18px rgba(8, 35, 81, 0.12);
+  transform: translateY(var(--lift, 0));
+}
+
+.tile-scrolly-partner-tile:nth-child(2n) {
+  /* Subtle stagger for alternating tiles. */
+  --lift: -5%;
+}
+
+.tile-scrolly-partner-tile img {
+  /* Tile background image. */
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tile-scrolly-partner-tile strong {
+  /* Initials overlay. */
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #1759bb;
+  font-size: clamp(0.84rem, 2.4cqw, 1.45rem);
+  letter-spacing: 0.08em;
+}
+
+.tile-scrolly-ribbon {
+  /* Panel 3 list container. */
+  display: grid;
+  width: min(100%, 50cqw);
+  gap: clamp(6px, 1.4cqw, 12px);
+  justify-self: center;
+}
+
+.tile-scrolly-ribbon div {
+  /* Ribbon row layout. */
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.78rem;
+  min-width: 0;
+  padding: clamp(8px, 1.6cqw, 14px) clamp(10px, 2.3cqw, 20px);
+  border: 1px solid rgba(247, 251, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.tile-scrolly-ribbon span {
+  /* Ribbon index. */
+  color: rgba(209, 161, 74, 0.96);
+  font-size: clamp(0.68rem, 1.7cqw, 0.9rem);
+  font-weight: 800;
+}
+
+.tile-scrolly-ribbon strong {
+  /* Ribbon name. */
+  min-width: 0;
+  overflow: hidden;
+  color: #ffffff;
+  font-size: clamp(0.78rem, 2cqw, 1rem);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@container (max-width: 520px) {
+  /* Mobile layout tweaks for the scrollytelling panels. */
+  .tile-scrolly-panel {
+    grid-template-columns: 1fr;
+    align-content: center;
+    gap: clamp(10px, 4cqh, 24px);
+    padding: clamp(16px, 5cqw, 28px);
+  }
+
+  .tile-scrolly-copy {
+    max-width: none;
+  }
+
+  .tile-scrolly-hero-stack,
+  .tile-scrolly-partner-grid,
+  .tile-scrolly-ribbon {
+    width: min(100%, 64cqw);
+  }
 }
 
 /* ─── Focus & reveal overlays ──────────────────────────────────────────────── */

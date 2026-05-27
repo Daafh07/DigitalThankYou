@@ -41,6 +41,11 @@ const FREE_TILE_Z = 3.25;
 // Dikte van de keramische doosvorm van de tegel (in world-units).
 const TILE_DEPTH = 0.1;
 
+// Afmetingen van de 3D-knop op de achterkant van het zwevende tegeltje.
+const LOOKBACK_BUTTON_WIDTH = 0.7;
+const LOOKBACK_BUTTON_HEIGHT = 0.16;
+const LOOKBACK_BUTTON_Z_OFFSET = 0.006;
+
 // Breedte/hoogte-verhouding van de tegelafbeelding.
 const TILE_ART_ASPECT = 79 / 82;
 
@@ -156,6 +161,59 @@ function loadImageTexture(url, renderer, version, onComplete) {
     () => onComplete?.(), // bij fout toch doorgaan
   );
   return configureTexture(texture, renderer);
+}
+
+function drawRoundedRect(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function createLookBackButtonTexture(renderer) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1024;
+  canvas.height = 256;
+
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  const x = 30;
+  const y = 34;
+  const width = canvas.width - x * 2;
+  const height = canvas.height - y * 2;
+
+  ctx.shadowColor = "rgba(5, 22, 56, 0.22)";
+  ctx.shadowBlur = 30;
+  ctx.shadowOffsetY = 14;
+  drawRoundedRect(ctx, x, y, width, height, 78);
+  ctx.fillStyle = "rgba(255, 251, 241, 0.96)";
+  ctx.fill();
+
+  ctx.shadowColor = "transparent";
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = "rgba(23, 89, 187, 0.68)";
+  ctx.stroke();
+
+  ctx.fillStyle = "#1759bb";
+  ctx.font = '800 70px Inter, "Segoe UI", sans-serif';
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("Take a look back", canvas.width / 2, canvas.height / 2 + 2);
+
+  const texture = configureTexture(new THREE.CanvasTexture(canvas), renderer);
+  texture.needsUpdate = true;
+  return texture;
 }
 
 /**
@@ -402,6 +460,8 @@ export default function HeroScene({
   onTileImpact,
   onIntroComplete,
   onTileInserted,
+  lookBackActive = false,
+  onLookBackRequest,
 } = {}) {
   const hostRef = useRef(null);
   const cameraRef = useRef(null);
@@ -415,8 +475,10 @@ export default function HeroScene({
   const startWallEntranceRef = useRef(startWallEntrance);
   const lockedGlowEnabledRef = useRef(lockedGlowEnabled);
   const externalOverlayRef  = useRef(externalFocusOverlayVisible ?? true);
+  const lookBackActiveRef = useRef(lookBackActive);
 
   useEffect(() => { externalOverlayRef.current  = externalFocusOverlayVisible ?? true; }, [externalFocusOverlayVisible]);
+  useEffect(() => { lookBackActiveRef.current = lookBackActive; }, [lookBackActive]);
   useEffect(() => { startIntroRef.current        = startIntro;        }, [startIntro]);
   useEffect(() => { startWallEntranceRef.current = startWallEntrance; }, [startWallEntrance]);
   useEffect(() => { lockedGlowEnabledRef.current  = lockedGlowEnabled; }, [lockedGlowEnabled]);
@@ -755,44 +817,34 @@ export default function HeroScene({
     scene.add(floatingTile);
     floatingTileRef.current = floatingTile;
 
-    // ── Inspected wall tile (3D doos voor tegels die uit de muur komen) ─────
-
-    const inspectedTileMaterials = [
-      ceramicSideMaterial.clone(),
-      ceramicSideMaterial.clone(),
-      ceramicSideMaterial.clone(),
-      ceramicSideMaterial.clone(),
-      emptyMaterial.clone(),
-      emptyMaterial.clone(),
-    ];
-    inspectedTileMaterials.forEach((m) => {
-      m.transparent = true;
-      m.opacity = 1;
-      m.toneMapped = false;
+    // 3D CTA op de achterkant van het tegeltje, zodat hij niet als HTML-overlay zweeft.
+    const lookBackButtonTexture = createLookBackButtonTexture(renderer);
+    const lookBackButtonMaterial = new THREE.MeshBasicMaterial({
+      map: lookBackButtonTexture,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      depthTest: true,
+      toneMapped: false,
+      side: THREE.DoubleSide,
     });
-
-    const inspectedTile = new THREE.Mesh(floatingTileGeometry, inspectedTileMaterials);
-    inspectedTile.visible = false;
-    inspectedTile.renderOrder = 11;
-    inspectedTile.position.set(0, 0, 2.65);
-    scene.add(inspectedTile);
-
-    const setInspectedTileFace = (index) => {
-      const sourceMaterial = tiles[index]?.material || emptyMaterial;
-      const frontMaterial = inspectedTileMaterials[4];
-      frontMaterial.map = sourceMaterial.map || null;
-      frontMaterial.color.copy(sourceMaterial.color || new THREE.Color("#ffffff"));
-      frontMaterial.opacity = 1;
-      frontMaterial.transparent = false;
-      frontMaterial.needsUpdate = true;
-
-      const backMaterial = inspectedTileMaterials[5];
-      backMaterial.map = emptyTexture;
-      backMaterial.color.set("#ffffff");
-      backMaterial.opacity = 1;
-      backMaterial.transparent = false;
-      backMaterial.needsUpdate = true;
-    };
+    const lookBackButtonGeometry = new THREE.PlaneGeometry(
+      LOOKBACK_BUTTON_WIDTH,
+      LOOKBACK_BUTTON_HEIGHT,
+    );
+    const lookBackButtonMesh = new THREE.Mesh(
+      lookBackButtonGeometry,
+      lookBackButtonMaterial,
+    );
+    lookBackButtonMesh.position.set(
+      0,
+      0,
+      -TILE_DEPTH / 2 - LOOKBACK_BUTTON_Z_OFFSET,
+    );
+    lookBackButtonMesh.rotation.y = Math.PI;
+    lookBackButtonMesh.renderOrder = 9;
+    lookBackButtonMesh.visible = false;
+    floatingTile.add(lookBackButtonMesh);
 
     // ── Idle glow (gouden halo achter de vergrendelde tegel) ──────────────────
 
@@ -1230,6 +1282,17 @@ export default function HeroScene({
     const inspectedDragState = { active: false, moved: false, suppressClick: false, lastX: 0, lastY: 0, rotationX: -0.08, rotationY: 0.14 };
     let userHasRotated = false; // blijft true zodra gebruiker ooit de tegel gedraaid heeft
     let hoveredWallTileIndex = -1;
+    let lookBackButtonVisible = false;
+    const lookBackRaycaster = new THREE.Raycaster();
+    const lookBackPointer = new THREE.Vector2();
+    const backFaceNormal = new THREE.Vector3(0, 0, -1);
+    const transformedBackNormal = new THREE.Vector3();
+    const updateLookBackButton = (visible) => {
+      if (lookBackButtonVisible === visible) return;
+      lookBackButtonVisible = visible;
+      lookBackButtonMesh.visible = visible;
+      lookBackButtonMaterial.opacity = visible ? 1 : 0;
+    };
     let inspectedWallTileIndex = -1;
     let inspectedTileClosing = false;
     let inspectedTileOpenProgress = 0;  // 0 = in muur, 1 = volledig naar voren
@@ -1450,6 +1513,22 @@ export default function HeroScene({
       };
     };
 
+    const isInsideLookBackButton = (e) => {
+      if (
+        !lookBackButtonVisible ||
+        !lookBackButtonMesh.visible ||
+        lookBackActiveRef.current
+      ) {
+        return false;
+      }
+
+      const rect = host.getBoundingClientRect();
+      lookBackPointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      lookBackPointer.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+      lookBackRaycaster.setFromCamera(lookBackPointer, camera);
+      return lookBackRaycaster.intersectObject(lookBackButtonMesh, false).length > 0;
+    };
+
     /**
      * Controleert of een world-coördinaat binnen de bounding box van de zwevende tegel valt.
      */
@@ -1531,6 +1610,8 @@ export default function HeroScene({
         return;
       }
 
+      const overLookBackButton = isInsideLookBackButton(e);
+
       if (pointer.overTile) {
         // Subtiele kanteling richting de muisaanwijzer terwijl de tegel wordt gehovered.
         const relX = THREE.MathUtils.clamp(
@@ -1545,7 +1626,7 @@ export default function HeroScene({
         );
         targetRotation.y = dragState.rotationY + relX * 0.12;
         targetRotation.x = dragState.rotationX - relY * 0.08;
-        host.style.cursor = "grab";
+        host.style.cursor = overLookBackButton ? "pointer" : "grab";
       } else {
         targetRotation.x = dragState.rotationX;
         targetRotation.y = dragState.rotationY;
@@ -1575,6 +1656,7 @@ export default function HeroScene({
 
       if (introActive || insertionStarted || inserted || extracting) return;
       const world = clientToWorld(e);
+      if (isInsideLookBackButton(e)) return;
       if (!isInsideFloatingTile(world)) return;
       dragState.active = true;
       dragState.moved = false;
@@ -1721,6 +1803,13 @@ export default function HeroScene({
         return;
       } // sleep was geen klik
 
+      if (isInsideLookBackButton(e)) {
+        updateLookBackButton(false);
+        onLookBackRequest?.();
+        host.style.cursor = "default";
+        return;
+      }
+
       // Klik buiten de tegel: start de invoegvlucht.
       if (isInsideFloatingTile(world)) return;
       insertionStarted = true;
@@ -1834,6 +1923,16 @@ export default function HeroScene({
         setArrowOpacity(0);
         arrowStartTime = -1;
       }
+
+      const freeTileReady =
+        !introActive &&
+        !insertionStarted &&
+        !inserted &&
+        !extracting &&
+        floatingTile.visible &&
+        !lookBackActiveRef.current;
+      transformedBackNormal.copy(backFaceNormal).applyQuaternion(floatingTile.quaternion);
+      updateLookBackButton(freeTileReady && transformedBackNormal.z > 0.42);
 
       // ── Tile entrance animation (zweef naar muurpositie) ──────────────────
 
@@ -2517,6 +2616,9 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
       rotRingGroup.children.forEach((c) => { if (c.geometry) c.geometry.dispose(); }); rotMatArc.dispose(); rotMatCone.dispose();
       if (lockedPlate)  lockedPlate.material.dispose();
       if (crackOverlay) crackOverlay.material.dispose();
+      lookBackButtonGeometry.dispose();
+      lookBackButtonTexture.dispose();
+      lookBackButtonMaterial.dispose();
       revealShards.forEach((s) => { s.geometry.dispose(); s.material.dispose(); });
       revealRays.forEach((r)   => { r.geometry.dispose(); r.material.dispose(); });
       [emptyTexture, currentBrandTexture, tileBackTexture, ceramicEdgeTexture, ritualsTexture, burgerkingTexture, lockedTexture, crackTexture].forEach((t) => t.dispose());

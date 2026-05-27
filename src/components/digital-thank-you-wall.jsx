@@ -3,6 +3,14 @@
 // DigitalThankYouWall is de root component van de hele ervaring.
 // Het beheert de volgorde van schermen: laadscherm → gebouw-ingang → de muurscène.
 
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import gsap from 'gsap';
+import { SplitText } from 'gsap/SplitText';
+import EntryBuildingModel, { preloadEntryBuildingModel } from './entry-building-model';
+import HeroScene from './hero-scene';
+import LoadingAnimation from './loading-animation';
+import RoomDecorModels from './room-decor-models';
+import TileScrollytellingFrame from './tile-scrollytelling-frame';
 import {
   Suspense,
   useCallback,
@@ -110,16 +118,14 @@ export default function DigitalThankYouWall() {
 
   // Staat voor de muurscène zelf.
   const [wallAnimationStarted, setWallAnimationStarted] = useState(false);
-  const [introComplete, setIntroComplete] = useState(false);
-  const [tileInserted, setTileInserted] = useState(false);
-  const [focusOverlayVisible, setFocusOverlayVisible] = useState(true); // donkere vignette
-  const [revealLightVisible, setRevealLightVisible] = useState(false); // gouden lichtstralen
-  const [decorImpactSignal, setDecorImpactSignal] = useState(0);
-  const [wallEntranceReady, setWallEntranceReady] = useState(false);
-  const [lockedGlowReady, setLockedGlowReady] = useState(false);
-  const [tileBaseElementsReady, setTileBaseElementsReady] = useState(false);
-  const [activationTileRevealPending, setActivationTileRevealPending] =
-    useState(false);
+  const [introComplete,        setIntroComplete]         = useState(false);
+  const [tileInserted,         setTileInserted]          = useState(false);
+  const [lookBackActive,       setLookBackActive]        = useState(false);
+  const [focusOverlayVisible,  setFocusOverlayVisible]  = useState(true);  // donkere vignette
+  const [revealLightVisible,   setRevealLightVisible]   = useState(false); // gouden lichtstralen
+  const [decorImpactSignal,    setDecorImpactSignal]    = useState(0);
+  const [wallEntranceReady,    setWallEntranceReady]     = useState(false);
+  const [lockedGlowReady,      setLockedGlowReady]       = useState(false);
 
   // Vazen zijn zichtbaar zodra het gebouw betreden is.
   // Muur gaat pas bewegen na 9s (nadat de vaas-animatie klaar is).
@@ -216,7 +222,10 @@ export default function DigitalThankYouWall() {
     const el = hintRef.current;
     if (!el) return;
 
-    if (introComplete && !tileInserted) {
+    if (lookBackActive) {
+      if (hintSwapTimer.current) { hintSwapTimer.current.kill(); hintSwapTimer.current = null; }
+      hideHintText(el);
+    } else if (introComplete && !tileInserted) {
       gsap.killTweensOf(el);
       if (hintSwapTimer.current) {
         hintSwapTimer.current.kill();
@@ -227,12 +236,10 @@ export default function DigitalThankYouWall() {
 
       // Na 6s: fade out en swap naar de instructietekst
       hintSwapTimer.current = gsap.delayedCall(6, () => {
-        hideHintText(el, () =>
-          revealHintText(
-            el,
-            'Click on the wall to add your tile to the LiveWall,<br>or click "Let\'s take a look back" for a personalised experience',
-          ),
-        );
+        hideHintText(el, () => revealHintText(
+          el,
+          'Click on the wall to add your tile to the LiveWall',
+        ));
       });
     } else if (tileInserted) {
       if (hintSwapTimer.current) {
@@ -248,7 +255,7 @@ export default function DigitalThankYouWall() {
         hintSwapTimer.current = null;
       }
     };
-  }, [introComplete, tileInserted]);
+  }, [introComplete, lookBackActive, tileInserted]);
 
   const lockHintRef = useRef(null);
   const lockHintSplit = useRef(null);
@@ -292,43 +299,15 @@ export default function DigitalThankYouWall() {
   }, [lockedGlowReady, wallAnimationStarted]);
 
   // Stabiele callbacks zodat onderliggende componenten niet onnodig opnieuw renderen.
-  const handleSceneReady = useCallback(() => setSceneReady(true), []);
-  const handleLoadingComplete = useCallback(
-    () => setMinimumTimePassed(true),
-    [],
-  );
-  const handleEntryBuildingReady = useCallback(
-    () => setEntryBuildingReady(true),
-    [],
-  );
-  const handleEntryFadeProgress = useCallback(
-    (v) => setEntryFadeOpacity(v),
-    [],
-  );
-  const handleTileImpact = useCallback(
-    () => setDecorImpactSignal((value) => value + 1),
-    [],
-  );
-  const handleTileBaseElementsReady = useCallback(
-    () => setTileBaseElementsReady(true),
-    [],
-  );
-  const handleWallEntranceComplete = useCallback(() => {
-    /* muur is klaar, niets meer te doen */
-  }, []);
-  const handleCodeActivationComplete = useCallback(
-    () => setCodeActivationSceneDone(true),
-    [],
-  );
-  const handleCodeActivationReady = useCallback(
-    () => setCodeActivationSceneReady(true),
-    [],
-  );
-  const handleIntroComplete = useCallback(() => setIntroComplete(true), []);
-  const handleTileInserted = useCallback(() => {
-    setTileInserted(true);
-    setIntroComplete(false);
-  }, []);
+  const handleSceneReady           = useCallback(() => setSceneReady(true),                              []);
+  const handleLoadingComplete      = useCallback(() => setMinimumTimePassed(true),                       []);
+  const handleEntryBuildingReady   = useCallback(() => setEntryBuildingReady(true),                      []);
+  const handleTileImpact           = useCallback(() => setDecorImpactSignal((value) => value + 1),       []);
+  const handleWallEntranceComplete = useCallback(() => {/* muur is klaar, niets meer te doen */},        []);
+  const handleIntroComplete        = useCallback(() => setIntroComplete(true),                           []);
+  const handleTileInserted         = useCallback(() => { setTileInserted(true); setIntroComplete(false); }, []);
+  const handleLookBackStart        = useCallback(() => setLookBackActive(true),                           []);
+  const handleLookBackComplete     = useCallback(() => setLookBackActive(false),                          []);
 
   // Alle drie de poorten zijn open → het laadscherm mag weg.
   const loadingComplete = assetsReady && sceneReady && minimumTimePassed;
@@ -526,7 +505,7 @@ export default function DigitalThankYouWall() {
         {/* De WebGL-muurscène, verborgen totdat het gebouw betreden is.
             Suspense vangt de lazy-import op terwijl Three.js laadt. */}
         <div
-          className={`livewall-wall${buildingEntered ? " livewall-wall-visible" : ""}`}
+          className={`livewall-wall${buildingEntered ? " livewall-wall-visible" : ""}${lookBackActive ? " livewall-wall-scrolly" : ""}`}
         >
           <Suspense
             fallback={<div className="loading">Preparing the wall</div>}
@@ -551,8 +530,16 @@ export default function DigitalThankYouWall() {
               onTileImpact={handleTileImpact}
               onIntroComplete={handleIntroComplete}
               onTileInserted={handleTileInserted}
+              lookBackActive={lookBackActive}
+              onLookBackRequest={handleLookBackStart}
             />
           </Suspense>
+          <TileScrollytellingFrame
+            active={lookBackActive}
+            partners={partners}
+            primaryPartner={primaryPartner}
+            onComplete={handleLookBackComplete}
+          />
         </div>
 
         {/* Unlock hint — visible during locked glow, disappears on tile click */}
