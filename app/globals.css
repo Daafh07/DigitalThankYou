@@ -466,7 +466,7 @@ button {
 .tile-scrolly-frame-active {
   visibility: visible;
   pointer-events: auto;
-  animation: scrollyFrameReveal 1.6s cubic-bezier(0.22, 1, 0.36, 1) 3.2s forwards;
+  animation: scrollyFrameReveal 2.2s cubic-bezier(0.16, 1, 0.3, 1) 2.0s forwards;
 }
 
 .tile-scrolly-frame-returning {
@@ -477,14 +477,24 @@ button {
 @keyframes scrollyFrameReveal {
   0% {
     opacity: 0;
+    filter: blur(6px) saturate(0.6);
+    transform: scale(1.012);
   }
 
-  30% {
-    opacity: 0.12;
+  20% {
+    opacity: 0.08;
+  }
+
+  55% {
+    opacity: 0.55;
+    filter: blur(2px) saturate(0.85);
+    transform: scale(1.004);
   }
 
   100% {
     opacity: 1;
+    filter: blur(0px) saturate(1);
+    transform: scale(1);
   }
 }
 
