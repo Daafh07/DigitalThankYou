@@ -25,6 +25,162 @@ const LOCKED_TILE_TEXTURE = "/assets/textures/lockedtile.svg";
 const TILE_BACK_TEXTURE = "/assets/textures/achterkantefteling.svg";
 const CERAMIC_EDGE_TEXTURE = "/assets/textures/keramiek.jpg"; // JPG voor de keramische rand
 
+const WALL_TILE_TEXTURES = [
+  {
+    id: "rituals",
+    front: RITUALS_TEXTURE,
+    back: "/assets/textures/Ritualsachterkant.svg",
+  },
+  {
+    id: "burgerking",
+    front: BURGERKING_TEXTURE,
+    back: "/assets/textures/Burgerkingachterkant.svg",
+  },
+  {
+    id: "campina",
+    front: "/assets/textures/Campina.svg",
+    back: "/assets/textures/Campinaachterkant.svg",
+  },
+  {
+    id: "heineken",
+    front: "/assets/textures/Heiniken.svg",
+    back: "/assets/textures/Heinikenachterkant.svg",
+    crop: { x: 0, y: 0, width: 79, height: 83 },
+  },
+  {
+    id: "doritos",
+    front: "/assets/textures/Doritos.svg",
+    back: "/assets/textures/Doritosachterkant.svg",
+    crop: { x: 0, y: 0, width: 79, height: 83 },
+  },
+  {
+    id: "hema",
+    front: "/assets/textures/Hema.svg",
+    back: "/assets/textures/Hemaachterkant.svg",
+  },
+  {
+    id: "kruidvat",
+    front: "/assets/textures/Kruidvat.svg",
+    back: "/assets/textures/Kruidvatachterkant.svg",
+  },
+  {
+    id: "mcdonalds",
+    front: "/assets/textures/Mcdonalds.svg",
+    back: "/assets/textures/Mcdonaldsachterkant.svg",
+    crop: { x: 0, y: 0, width: 79, height: 83 },
+  },
+  {
+    id: "avrotros",
+    front: "/assets/textures/avrotros.svg",
+    back: "/assets/textures/avrotrosachtergrond.svg",
+    crop: { x: 0, y: 0, width: 79, height: 83 },
+  },
+  {
+    id: "bosch",
+    front: "/assets/textures/bosch.svg",
+    back: "/assets/textures/Boschachterkant.svg",
+  },
+  {
+    id: "decathlon",
+    front: "/assets/textures/decathlon.svg",
+    back: "/assets/textures/decathlonachtergrond.svg",
+  },
+  {
+    id: "dumpert",
+    front: "/assets/textures/Dumpert.svg",
+    back: "/assets/textures/Dumpertachtergrond.svg",
+    crop: { x: 0, y: 0, width: 79, height: 83 },
+  },
+  {
+    id: "eindhovenairport",
+    front: "/assets/textures/eindhovenairport.svg",
+    back: "/assets/textures/eindhovenairportachtergrond.svg",
+    crop: { x: 0, y: 0, width: 79, height: 83 },
+  },
+  {
+    id: "justeat",
+    front: "/assets/textures/Justeat.svg",
+    back: "/assets/textures/Justeatachtergrond.svg",
+    crop: { x: 2, y: 0, width: 79, height: 83 },
+  },
+  {
+    id: "klm",
+    front: "/assets/textures/klm.svg",
+    back: "/assets/textures/klmachtergrond.svg",
+    crop: { x: 6, y: 0, width: 79, height: 83 },
+  },
+  {
+    id: "lays",
+    front: "/assets/textures/lays.svg",
+    back: "/assets/textures/laysachtergrond.svg",
+    crop: { x: 0, y: 0, width: 79, height: 83 },
+  },
+  {
+    id: "ns",
+    front: "/assets/textures/ns.svg",
+    back: "/assets/textures/nsachtergrond.svg",
+    crop: { x: 0, y: 9, width: 79, height: 83 },
+  },
+  {
+    id: "postcode",
+    front: "/assets/textures/postcode.svg",
+    back: "/assets/textures/postcodeachtergrond.svg",
+  },
+  {
+    id: "sonymusic",
+    front: "/assets/textures/sonymusic.svg",
+    back: "/assets/textures/sonymusicachtergrond.svg",
+    crop: { x: 0, y: 0, width: 79, height: 83 },
+  },
+  {
+    id: "sportvisunie",
+    front: "/assets/textures/sportvisunie.svg",
+    back: "/assets/textures/sportvisunieachtergrond.svg",
+    crop: { x: 0, y: 0, width: 79, height: 83 },
+  },
+  {
+    id: "trekpleiser",
+    front: "/assets/textures/trekpleiser.svg",
+    back: "/assets/textures/trekpleiserachtergrond.svg",
+  },
+  {
+    id: "vgz",
+    front: "/assets/textures/vgz.svg",
+    back: "/assets/textures/vgzachtergrond.svg",
+  },
+  {
+    id: "wehkamp",
+    front: "/assets/textures/wehkamp-1.svg",
+    back: "/assets/textures/wehkamp.svg",
+  },
+];
+
+const WALL_TILE_PLACEMENTS = new Map([
+  [CURRENT_BRAND_INDEX - 1, "rituals"],
+  [CURRENT_BRAND_INDEX + 1, "burgerking"],
+  [12, "campina"],
+  [17, "heineken"],
+  [31, "doritos"],
+  [38, "hema"],
+  [42, "kruidvat"],
+  [47, "mcdonalds"],
+  [0, "avrotros"],
+  [3, "bosch"],
+  [7, "decathlon"],
+  [10, "dumpert"],
+  [15, "eindhovenairport"],
+  [19, "justeat"],
+  [20, "klm"],
+  [27, "lays"],
+  [33, "ns"],
+  [36, "postcode"],
+  [44, "sonymusic"],
+  [50, "sportvisunie"],
+  [53, "trekpleiser"],
+  [56, "vgz"],
+  [59, "wehkamp"],
+]);
+
 // ─── Audio ────────────────────────────────────────────────────────────────────
 
 // Geluidsbestand dat afspeelt als een tegel de muur raakt.
@@ -41,9 +197,10 @@ const FREE_TILE_Z = 3.25;
 // Dikte van de keramische doosvorm van de tegel (in world-units).
 const TILE_DEPTH = 0.1;
 
-// Afmetingen van de 3D-knop op de achterkant van het zwevende tegeltje.
-const LOOKBACK_BUTTON_WIDTH = 0.7;
-const LOOKBACK_BUTTON_HEIGHT = 0.16;
+// Onzichtbare hit-area over de "Take a look back"-tekst op de achterkant.
+const LOOKBACK_BUTTON_WIDTH = 0.58;
+const LOOKBACK_BUTTON_HEIGHT = 0.22;
+const LOOKBACK_BUTTON_Y = -0.15;
 const LOOKBACK_BUTTON_Z_OFFSET = 0.006;
 
 // Breedte/hoogte-verhouding van de tegelafbeelding.
@@ -88,6 +245,15 @@ function smootherStep(t) {
   return t * t * t * (t * (t * 6 - 15) + 10);
 }
 
+function getWallTileDefinition(index) {
+  if (index === CURRENT_BRAND_INDEX) return null;
+
+  const tileId = WALL_TILE_PLACEMENTS.get(index);
+  if (!tileId) return null;
+
+  return WALL_TILE_TEXTURES.find((tile) => tile.id === tileId) ?? null;
+}
+
 // ─── Textuurhelpers ───────────────────────────────────────────────────────────
 
 /**
@@ -113,7 +279,14 @@ function configureTexture(texture, renderer) {
  * uitzien zonder zwarte randen.
  * Roept `onComplete` aan zodra de afbeelding gedecod eerd is (of meteen bij een fout).
  */
-function loadSvgTexture(url, renderer, version, size = 2048, onComplete) {
+function loadSvgTexture(
+  url,
+  renderer,
+  version,
+  size = 2048,
+  onComplete,
+  sourceCrop = null,
+) {
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -135,7 +308,21 @@ function loadSvgTexture(url, renderer, version, size = 2048, onComplete) {
     ctx.clearRect(0, 0, size, size);
     ctx.fillStyle = "#fff8ee";
     ctx.fillRect(0, 0, size, size);
-    ctx.drawImage(image, 0, 0, size, size);
+    if (sourceCrop) {
+      ctx.drawImage(
+        image,
+        sourceCrop.x,
+        sourceCrop.y,
+        sourceCrop.width,
+        sourceCrop.height,
+        0,
+        0,
+        size,
+        size,
+      );
+    } else {
+      ctx.drawImage(image, 0, 0, size, size);
+    }
     texture.needsUpdate = true;
     onComplete?.();
   };
@@ -180,36 +367,11 @@ function drawRoundedRect(ctx, x, y, width, height, radius) {
 
 function createLookBackButtonTexture(renderer) {
   const canvas = document.createElement("canvas");
-  canvas.width = 1024;
-  canvas.height = 256;
+  canvas.width = 16;
+  canvas.height = 16;
 
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-
-  const x = 30;
-  const y = 34;
-  const width = canvas.width - x * 2;
-  const height = canvas.height - y * 2;
-
-  ctx.shadowColor = "rgba(5, 22, 56, 0.22)";
-  ctx.shadowBlur = 30;
-  ctx.shadowOffsetY = 14;
-  drawRoundedRect(ctx, x, y, width, height, 78);
-  ctx.fillStyle = "rgba(255, 251, 241, 0.96)";
-  ctx.fill();
-
-  ctx.shadowColor = "transparent";
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = "rgba(23, 89, 187, 0.68)";
-  ctx.stroke();
-
-  ctx.fillStyle = "#1759bb";
-  ctx.font = '800 70px Inter, "Segoe UI", sans-serif';
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("Take a look back", canvas.width / 2, canvas.height / 2 + 2);
 
   const texture = configureTexture(new THREE.CanvasTexture(canvas), renderer);
   texture.needsUpdate = true;
@@ -462,6 +624,7 @@ export default function HeroScene({
   onTileInserted,
   lookBackActive = false,
   onLookBackRequest,
+  onLookBackReady,
 } = {}) {
   const hostRef = useRef(null);
   const cameraRef = useRef(null);
@@ -515,14 +678,16 @@ export default function HeroScene({
 
     // ── Ready gate ───────────────────────────────────────────────────────────
 
-    // onReady mag pas afgaan als het eerste frame getekend is én minstens 4 texturen
+    // onReady mag pas afgaan als het eerste frame getekend is én alle zichtbare tegeltexturen
     // volledig geladen zijn. Zo ziet de bovenliggende component nooit een kaal raster.
+    const expectedTextureLoads = 4 + WALL_TILE_TEXTURES.length * 2 + 1;
     let loadedTextures = 0;
     let firstFrameDone = false;
     let readyFired = false;
 
     const notifyReady = () => {
-      if (readyFired || loadedTextures < 4 || !firstFrameDone) return;
+      if (readyFired || loadedTextures < expectedTextureLoads || !firstFrameDone)
+        return;
       readyFired = true;
       onReady?.();
     };
@@ -566,24 +731,30 @@ export default function HeroScene({
       markTextureLoaded,
     );
 
-    // Deze texturen tellen niet mee voor de ready-gate (geen markTextureLoaded callback).
-    const ritualsTexture = loadSvgTexture(
-      RITUALS_TEXTURE,
-      renderer,
-      version,
-      2048,
-    );
-    const burgerkingTexture = loadSvgTexture(
-      BURGERKING_TEXTURE,
-      renderer,
-      version,
-      2048,
-    );
+    const wallTileAssets = WALL_TILE_TEXTURES.map((tile) => ({
+      ...tile,
+      frontTexture: loadSvgTexture(
+        tile.front,
+        renderer,
+        version,
+        2048,
+        markTextureLoaded,
+        tile.crop,
+      ),
+      backTexture: loadSvgTexture(
+        tile.back,
+        renderer,
+        version,
+        2048,
+        markTextureLoaded,
+      ),
+    }));
     const lockedTexture = loadSvgTexture(
       LOCKED_TILE_TEXTURE,
       renderer,
       version,
       2048,
+      markTextureLoaded,
     );
 
     // De barst-textuur wordt procedureel gegenereerd en tijdens de reveal per frame bijgewerkt.
@@ -602,16 +773,26 @@ export default function HeroScene({
       color: "#fffdf8",
       toneMapped: false,
     });
-    const ritualsMaterial = new THREE.MeshBasicMaterial({
-      color: "#ffffff",
-      map: ritualsTexture,
-      toneMapped: false,
-    });
-    const burgerkingMaterial = new THREE.MeshBasicMaterial({
-      color: "#ffffff",
-      map: burgerkingTexture,
-      toneMapped: false,
-    });
+    const wallTileMaterials = wallTileAssets.map((tile) => ({
+      ...tile,
+      frontMaterial: new THREE.MeshBasicMaterial({
+        color: "#ffffff",
+        map: tile.frontTexture,
+        toneMapped: false,
+        transparent: true,
+        opacity: 1,
+      }),
+      backMaterial: new THREE.MeshBasicMaterial({
+        color: "#ffffff",
+        map: tile.backTexture,
+        toneMapped: false,
+        transparent: true,
+        opacity: 1,
+      }),
+    }));
+    const wallTileMaterialById = new Map(
+      wallTileMaterials.map((tile) => [tile.id, tile]),
+    );
     const currentBrandMaterial = new THREE.MeshBasicMaterial({
       color: "#ffffff",
       map: currentBrandTexture,
@@ -752,12 +933,16 @@ export default function HeroScene({
 
     const tiles = [];
     for (let i = 0; i < TILE_COUNT; i++) {
-      // Wijs een speciaal materiaal toe aan de centrale slot en de buren ervan.
-      let mat = emptyMaterial;
-      if (i === CURRENT_BRAND_INDEX) mat = blankMaterial; // centrale slot: leeg (wordt gevuld door de gebruiker)
-      if (i === CURRENT_BRAND_INDEX - 1) mat = ritualsMaterial; // linker buurmerk
-      if (i === CURRENT_BRAND_INDEX + 1) mat = burgerkingMaterial; // rechter buurmerk
+      const tileDefinition = getWallTileDefinition(i);
+      const tileAsset = tileDefinition
+        ? wallTileMaterialById.get(tileDefinition.id)
+        : null;
+      const mat =
+        i === CURRENT_BRAND_INDEX
+          ? blankMaterial
+          : (tileAsset?.frontMaterial ?? emptyMaterial);
       const mesh = new THREE.Mesh(tileGeometry, mat);
+      mesh.userData.tileAsset = tileAsset;
       mesh.visible = false;
       wallGroup.add(mesh);
       tiles.push(mesh);
@@ -817,6 +1002,28 @@ export default function HeroScene({
     scene.add(floatingTile);
     floatingTileRef.current = floatingTile;
 
+    const inspectedTileMaterials = [
+      ceramicSideMaterial.clone(),
+      ceramicSideMaterial.clone(),
+      ceramicSideMaterial.clone(),
+      ceramicSideMaterial.clone(),
+      currentBrandMaterial.clone(),
+      tileBackMaterial.clone(),
+    ];
+    inspectedTileMaterials.forEach((m) => {
+      m.transparent = true;
+      m.opacity = 1;
+    });
+
+    const inspectedTile = new THREE.Mesh(
+      floatingTileGeometry.clone(),
+      inspectedTileMaterials,
+    );
+    inspectedTile.position.z = 0.07;
+    inspectedTile.renderOrder = 8;
+    inspectedTile.visible = false;
+    scene.add(inspectedTile);
+
     // 3D CTA op de achterkant van het tegeltje, zodat hij niet als HTML-overlay zweeft.
     const lookBackButtonTexture = createLookBackButtonTexture(renderer);
     const lookBackButtonMaterial = new THREE.MeshBasicMaterial({
@@ -838,7 +1045,7 @@ export default function HeroScene({
     );
     lookBackButtonMesh.position.set(
       0,
-      0,
+      LOOKBACK_BUTTON_Y,
       -TILE_DEPTH / 2 - LOOKBACK_BUTTON_Z_OFFSET,
     );
     lookBackButtonMesh.rotation.y = Math.PI;
@@ -1250,6 +1457,8 @@ export default function HeroScene({
     let extractProgress = 0;
     let impactTime = null; // tijdstip van inslag (voor naeffecten)
     let hasEverBeenInserted = false;
+    let lookBackPending = false;  // tegel vliegt naar muur na lookback-klik
+    let lookBackInserted = false; // insertie was via lookback → geen aardbeving
 
     // Toestandsvariabelen voor de intro-sequentie.
     let introProgress         = 0;
@@ -1291,7 +1500,7 @@ export default function HeroScene({
       if (lookBackButtonVisible === visible) return;
       lookBackButtonVisible = visible;
       lookBackButtonMesh.visible = visible;
-      lookBackButtonMaterial.opacity = visible ? 1 : 0;
+      lookBackButtonMaterial.opacity = 0;
     };
     let inspectedWallTileIndex = -1;
     let inspectedTileClosing = false;
@@ -1300,6 +1509,13 @@ export default function HeroScene({
     let inspectedTileOriginX = 0;       // world-positie van de brontegel
     let inspectedTileOriginY = 0;
     let inspectedTileOriginIndex = -1;  // welke muurtegel verborgen is
+    const setInspectedTileFace = (tileIndex) => {
+      const tileAsset = tiles[tileIndex]?.userData.tileAsset;
+      inspectedTileMaterials[4].map = tileAsset?.frontTexture ?? emptyTexture;
+      inspectedTileMaterials[5].map = tileAsset?.backTexture ?? emptyTexture;
+      inspectedTileMaterials[4].needsUpdate = true;
+      inspectedTileMaterials[5].needsUpdate = true;
+    };
 
     // Bijhouden welke tegels hun ripple-geluid al afgespeeld hebben na de inslag.
     const droppedTileSounds = new Set();
@@ -1805,7 +2021,18 @@ export default function HeroScene({
 
       if (isInsideLookBackButton(e)) {
         updateLookBackButton(false);
-        onLookBackRequest?.();
+        lookBackPending = true;
+        insertionStarted = true;
+        insertionFlightReleased = false;
+        progress = 0;
+        setShowTileDownload(false);
+        setShowUnlockOverlay(false);
+        onFocusOverlayChange?.(false);
+        ensureDropSound();
+        audioContext?.resume?.();
+        clockReset();
+        targetRotation.x = 0;
+        targetRotation.y = 0;
         host.style.cursor = "default";
         return;
       }
@@ -1854,9 +2081,10 @@ export default function HeroScene({
         floatingTile.visible = true;
         emptyMaterial.opacity =
           blankMaterial.opacity =
-          ritualsMaterial.opacity =
-          burgerkingMaterial.opacity =
             1;
+        wallTileMaterials.forEach((tile) => {
+          tile.frontMaterial.opacity = 1;
+        });
         lockedPlate.material.opacity = 1;
         lockedPlate.visible = true;
         layoutTiles();
@@ -2212,6 +2440,7 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
             insertionStarted =
             insertionFlightReleased =
             inserted =
+            lookBackInserted =
               false;
           progress = extractProgress = 0;
           targetRotation.x =
@@ -2300,7 +2529,12 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
         impactTime = elapsed;
         onTileImpact?.();
         onTileInserted?.();
-        currentBrandWallTile.material.opacity = 1; // muurversie van de tegel verschijnt
+        currentBrandWallTile.material.opacity = 1;
+        if (lookBackPending) {
+          lookBackPending = false;
+          lookBackInserted = true;
+          setTimeout(() => onLookBackReady?.(), 1000);
+        }
       }
 
       // ── Particles & shockwave ────────────────────────────────────────────
@@ -2309,7 +2543,7 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
       // Vóór de inslag: deeltjes volgen de zwevende tegel (intro-dust).
       const impactLife = impactTime == null ? -1 : elapsed - impactTime;
       const particlePulse =
-        impactLife > 0 ? Math.exp(-impactLife * 0.95) : revealDustPulse;
+        (lookBackInserted && impactLife > 0) ? 0 : (impactLife > 0 ? Math.exp(-impactLife * 0.95) : revealDustPulse);
       particles.position.set(
         impactLife > 0 ? targetX : floatingTile.position.x,
         (impactLife > 0 ? targetY : floatingTile.position.y) +
@@ -2328,7 +2562,7 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
         0.015 + particlePulse * (impactLife > 0 ? 0.03 : 0.022);
 
       // Schokgolf uitdijt vanuit het insertiepunt gedurende 3,2 seconden.
-      if (impactLife > 0 && impactLife < 3.2) {
+      if (!lookBackInserted && impactLife > 0 && impactLife < 3.2) {
         shockwave.position.set(targetX, targetY, shockwave.position.z);
         shockwave.scale.setScalar(0.14 + impactLife * 2.45);
         shockwaveMaterial.opacity = Math.max(0, 0.34 * (1 - impactLife / 3.2));
@@ -2346,10 +2580,10 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
         const row = Math.floor(i / TILE_COLS);
         const dist = Math.hypot(col - centerCol, row - centerRow); // afstand tot de centrale tegel
         const waveT = impactLife > 0 ? impactLife * 1.85 : -1;
-        const wave =
-          impactLife > 0 ? Math.max(0, 1 - Math.abs(waveT - dist) * 0.72) : 0; // ripple-puls
-        const damp = Math.exp(Math.max(0, impactLife) * -0.38); // demping over de tijd
-        const tremor = Math.sin(impactLife * 25 + dist * 2.2) * wave * damp; // trilling
+        const wave = (!lookBackInserted && impactLife > 0)
+          ? Math.max(0, 1 - Math.abs(waveT - dist) * 0.72) : 0;
+        const damp = Math.exp(Math.max(0, impactLife) * -0.38);
+        const tremor = lookBackInserted ? 0 : Math.sin(impactLife * 25 + dist * 2.2) * wave * damp;
         const radialX =
           col === centerCol && row === centerRow
             ? 0
@@ -2361,6 +2595,7 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
 
         // Speel een zacht tik-geluidje als de schokgolf de tegel bereikt.
         if (
+          !lookBackInserted &&
           impactLife > 0 &&
           waveT - dist > 0.42 &&
           !droppedTileSounds.has(i)
@@ -2611,7 +2846,7 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
       setRevealStageLight(false);
 
       renderer.dispose();
-      [tileGeometry, floatingTileGeometry, overlayGeometry, particleGeometry, shockwave.geometry, idleGlow.geometry].forEach((g) => g.dispose());
+      [tileGeometry, floatingTileGeometry, inspectedTile.geometry, overlayGeometry, particleGeometry, shockwave.geometry, idleGlow.geometry].forEach((g) => g.dispose());
       [particleMaterial, shockwaveMaterial, idleGlowMaterial, overlayMaterial, flashOverlayMaterial].forEach((m) => m.dispose());
       rotRingGroup.children.forEach((c) => { if (c.geometry) c.geometry.dispose(); }); rotMatArc.dispose(); rotMatCone.dispose();
       if (lockedPlate)  lockedPlate.material.dispose();
@@ -2621,8 +2856,32 @@ const fadeOutT    = THREE.MathUtils.clamp((introT - 0.79) / 0.10, 0, 1);
       lookBackButtonMaterial.dispose();
       revealShards.forEach((s) => { s.geometry.dispose(); s.material.dispose(); });
       revealRays.forEach((r)   => { r.geometry.dispose(); r.material.dispose(); });
-      [emptyTexture, currentBrandTexture, tileBackTexture, ceramicEdgeTexture, ritualsTexture, burgerkingTexture, lockedTexture, crackTexture].forEach((t) => t.dispose());
-      [emptyMaterial, blankMaterial, ritualsMaterial, burgerkingMaterial, currentBrandMaterial, tileBackMaterial, ceramicSideMaterial, lockedMaterial, revealLightMaterial, crackOverlayMaterial].forEach((m) => m.dispose());
+      [
+        emptyTexture,
+        currentBrandTexture,
+        tileBackTexture,
+        ceramicEdgeTexture,
+        lockedTexture,
+        crackTexture,
+        ...wallTileMaterials.flatMap((tile) => [
+          tile.frontTexture,
+          tile.backTexture,
+        ]),
+      ].forEach((t) => t.dispose());
+      [
+        emptyMaterial,
+        blankMaterial,
+        currentBrandMaterial,
+        tileBackMaterial,
+        ceramicSideMaterial,
+        lockedMaterial,
+        revealLightMaterial,
+        crackOverlayMaterial,
+        ...wallTileMaterials.flatMap((tile) => [
+          tile.frontMaterial,
+          tile.backMaterial,
+        ]),
+      ].forEach((m) => m.dispose());
       currentBrandWallTile.material.dispose();
       floatingMaterials.forEach((m) => m.dispose());
       inspectedTileMaterials.forEach((m) => m.dispose());

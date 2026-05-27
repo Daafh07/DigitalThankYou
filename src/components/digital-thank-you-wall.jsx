@@ -3,14 +3,6 @@
 // DigitalThankYouWall is de root component van de hele ervaring.
 // Het beheert de volgorde van schermen: laadscherm → gebouw-ingang → de muurscène.
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import gsap from 'gsap';
-import { SplitText } from 'gsap/SplitText';
-import EntryBuildingModel, { preloadEntryBuildingModel } from './entry-building-model';
-import HeroScene from './hero-scene';
-import LoadingAnimation from './loading-animation';
-import RoomDecorModels from './room-decor-models';
-import TileScrollytellingFrame from './tile-scrollytelling-frame';
 import {
   Suspense,
   useCallback,
@@ -27,6 +19,7 @@ import EntryBuildingModel, {
 import HeroScene from "./hero-scene";
 import LoadingAnimation from "./loading-animation";
 import RoomDecorModels from "./room-decor-models";
+import TileScrollytellingFrame from "./tile-scrollytelling-frame";
 import CodeActivationScene, {
   preloadCodeActivationDoorModel,
 } from "./code-activation-scene";
@@ -115,6 +108,8 @@ export default function DigitalThankYouWall() {
   const [codeActivationSceneDone, setCodeActivationSceneDone] = useState(false);
   const [codeActivationRevealPending, setCodeActivationRevealPending] =
     useState(false);
+  const [activationTileRevealPending, setActivationTileRevealPending] =
+    useState(false);
 
   // Staat voor de muurscène zelf.
   const [wallAnimationStarted, setWallAnimationStarted] = useState(false);
@@ -126,6 +121,7 @@ export default function DigitalThankYouWall() {
   const [decorImpactSignal,    setDecorImpactSignal]    = useState(0);
   const [wallEntranceReady,    setWallEntranceReady]     = useState(false);
   const [lockedGlowReady,      setLockedGlowReady]       = useState(false);
+  const [tileBaseElementsReady, setTileBaseElementsReady] = useState(false);
 
   // Vazen zijn zichtbaar zodra het gebouw betreden is.
   // Muur gaat pas bewegen na 9s (nadat de vaas-animatie klaar is).
@@ -302,11 +298,15 @@ export default function DigitalThankYouWall() {
   const handleSceneReady           = useCallback(() => setSceneReady(true),                              []);
   const handleLoadingComplete      = useCallback(() => setMinimumTimePassed(true),                       []);
   const handleEntryBuildingReady   = useCallback(() => setEntryBuildingReady(true),                      []);
+  const handleEntryFadeProgress    = useCallback((value) => setEntryFadeOpacity(value),                 []);
+  const handleCodeActivationComplete = useCallback(() => setCodeActivationSceneDone(true),              []);
+  const handleCodeActivationReady  = useCallback(() => setCodeActivationSceneReady(true),                []);
   const handleTileImpact           = useCallback(() => setDecorImpactSignal((value) => value + 1),       []);
+  const handleTileBaseElementsReady = useCallback(() => setTileBaseElementsReady(true),                  []);
   const handleWallEntranceComplete = useCallback(() => {/* muur is klaar, niets meer te doen */},        []);
   const handleIntroComplete        = useCallback(() => setIntroComplete(true),                           []);
   const handleTileInserted         = useCallback(() => { setTileInserted(true); setIntroComplete(false); }, []);
-  const handleLookBackStart        = useCallback(() => setLookBackActive(true),                           []);
+  const handleLookBackReady        = useCallback(() => setLookBackActive(true),                           []);
   const handleLookBackComplete     = useCallback(() => setLookBackActive(false),                          []);
 
   // Alle drie de poorten zijn open → het laadscherm mag weg.
@@ -452,7 +452,8 @@ export default function DigitalThankYouWall() {
     }, SCENE_COVER_FADE_OUT_MS);
   }, [activationTileRevealPending, tileBaseElementsReady]);
 
-  // Muur start pas na 9s (vaas-animatie duurt 7s + kleine buffer).
+  // Eerst glow reveal op de vensterbankvazen, daarna spinnen de pilaarvazen in.
+  // De muur start pas daarna zodat de kamer rustig opgebouwd wordt.
   useEffect(() => {
     if (!buildingEntered) {
       setWallEntranceReady(false);
@@ -460,8 +461,8 @@ export default function DigitalThankYouWall() {
       return undefined;
     }
 
-    const wallTimer = window.setTimeout(() => setWallEntranceReady(true), 5000);
-    const glowTimer = window.setTimeout(() => setLockedGlowReady(true), 14500);
+    const wallTimer = window.setTimeout(() => setWallEntranceReady(true), 7000);
+    const glowTimer = window.setTimeout(() => setLockedGlowReady(true), 15000);
 
     return () => {
       window.clearTimeout(wallTimer);
@@ -531,7 +532,7 @@ export default function DigitalThankYouWall() {
               onIntroComplete={handleIntroComplete}
               onTileInserted={handleTileInserted}
               lookBackActive={lookBackActive}
-              onLookBackRequest={handleLookBackStart}
+              onLookBackReady={handleLookBackReady}
             />
           </Suspense>
           <TileScrollytellingFrame
@@ -564,6 +565,10 @@ export default function DigitalThankYouWall() {
         >
           <LoadingAnimation onComplete={handleLoadingComplete} />
         </div>
+        <div
+          className={`loading-to-entry-cover${loadingComplete && !entryTransitionDone ? " loading-to-entry-cover-visible" : ""}`}
+          aria-hidden="true"
+        />
       </div>
 
       {/* De gebouw-ingangsscène: een apart fullscreen-overlay met het 3D-gebouw.

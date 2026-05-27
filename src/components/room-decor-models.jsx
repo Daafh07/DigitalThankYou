@@ -116,8 +116,160 @@ function clamp01(value) {
   return Math.min(Math.max(value, 0), 1);
 }
 
+function setModelOpacity(model, opacity) {
+  model.traverse((child) => {
+    if (!child.isMesh) return;
+    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    mats.forEach((m) => {
+      m.opacity = opacity;
+      m.transparent = opacity < 0.999;
+      m.needsUpdate = true;
+    });
+  });
+}
 
-function createVaseReveal(vasePivot, vase, THREE, spinDir = 1) {
+function createGlowReveal(target, THREE, { duration = 3.2, holdUntil = 1.9 } = {}) {
+  function sm(edge0, edge1, x) {
+    const t = clamp01((x - edge0) / (edge1 - edge0));
+    return t * t * (3 - 2 * t);
+  }
+
+  target.updateWorldMatrix(true, true);
+  const bounds = new THREE.Box3().setFromObject(target);
+  const worldCenter = bounds.getCenter(new THREE.Vector3());
+  const parent = target.parent;
+  const parentInverse = new THREE.Matrix4().copy(parent.matrixWorld).invert();
+  const localPos = worldCenter.clone().applyMatrix4(parentInverse);
+  const basePosition = target.position.clone();
+  const baseScale = target.scale.clone();
+
+  const lightMat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    blending: THREE.AdditiveBlending,
+    uniforms: {
+      uTime: { value: 0 },
+      uIntensity: { value: 0 },
+      uRadius: { value: 0.08 },
+      uDistortion: { value: 0 },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec2 vUv;
+      uniform float uTime;
+      uniform float uIntensity;
+      uniform float uRadius;
+      uniform float uDistortion;
+
+      float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+      }
+      float noise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        float a = hash(i);
+        float b = hash(i + vec2(1.0, 0.0));
+        float c = hash(i + vec2(0.0, 1.0));
+        float d = hash(i + vec2(1.0, 1.0));
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+      }
+
+      void main() {
+        vec2 uv = vUv * 2.0 - 1.0;
+        float d = length(uv);
+        float angle = atan(uv.y, uv.x);
+        float wobble = noise(vec2(angle * 1.2, uTime * 0.5)) * uDistortion;
+        float r = uRadius + wobble;
+        float sphere = pow(1.0 - smoothstep(0.0, r, d), 1.75);
+        float haze = pow(1.0 - smoothstep(r * 0.35, r + 0.55, d), 2.4);
+        float alpha = (sphere * 1.35 + haze * 0.07) * uIntensity;
+        vec3 color = mix(vec3(1.0, 0.95, 0.84), vec3(1.0), sphere);
+        gl_FragColor = vec4(color, alpha);
+      }
+    `,
+  });
+
+  const lightPlane = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), lightMat);
+  lightPlane.renderOrder = -1;
+  lightPlane.frustumCulled = false;
+  lightPlane.position.set(localPos.x, localPos.y, localPos.z - 0.5);
+  parent.add(lightPlane);
+
+  const state = { startedAt: -1, visible: false, complete: false };
+
+  const reset = () => {
+    state.startedAt = -1;
+    state.visible = false;
+    state.complete = false;
+    lightMat.uniforms.uIntensity.value = 0;
+    lightMat.uniforms.uRadius.value = 0.08;
+    lightMat.uniforms.uDistortion.value = 0;
+    target.position.copy(basePosition);
+    target.position.y = basePosition.y - 0.18;
+    target.scale.copy(baseScale).multiplyScalar(0.92);
+    setModelOpacity(target, 0);
+  };
+
+  reset();
+
+  return {
+    state,
+    start(now) {
+      if (state.visible || state.complete) return;
+      state.startedAt = now;
+      state.visible = true;
+    },
+    reset,
+    update(now) {
+      if (!state.visible || state.complete) return;
+      const elapsed = now - state.startedAt;
+      const t = clamp01(elapsed / duration);
+      const appear = sm(0, 0.9 / duration, t);
+      const grow = sm(1.1 / duration, 2.75 / duration, t);
+      const glowBloom = sm(0.85 / duration, 2.65 / duration, t);
+      const pulseAmount = 0.46 + glowBloom * 0.5;
+      const hold = 1 - sm(2.85 / duration, duration / duration, t);
+      const materialize = sm(2.2 / duration, duration / duration, t);
+      const settle = 1 - (1 - materialize) ** 3;
+      const overshoot = Math.sin(materialize * Math.PI) * 0.045;
+      const shimmer = materialize < 1 ? Math.sin(elapsed * 8.0) * (1 - materialize) * 0.08 : 0;
+      const opacity = clamp01(materialize * 1.08 + shimmer);
+
+      lightMat.uniforms.uTime.value = elapsed;
+      lightMat.uniforms.uIntensity.value = appear * hold * pulseAmount;
+      lightMat.uniforms.uRadius.value = 0.02 + appear * 0.05 + grow * 0.24;
+      lightMat.uniforms.uDistortion.value = 0.001 + grow * 0.0035;
+      target.position.copy(basePosition);
+      target.position.y = basePosition.y - 0.18 * (1 - settle) + overshoot;
+      target.scale.copy(baseScale).multiplyScalar(0.92 + settle * 0.08 + overshoot * 0.12);
+      setModelOpacity(target, opacity);
+
+      if (t >= 1) {
+        state.complete = true;
+        lightMat.uniforms.uIntensity.value = 0;
+        target.position.copy(basePosition);
+        target.scale.copy(baseScale);
+        setModelOpacity(target, 1);
+      }
+    },
+    dispose() {
+      parent.remove(lightPlane);
+      lightPlane.geometry.dispose();
+      lightMat.dispose();
+    },
+  };
+}
+
+
+function createVaseReveal(vasePivot, vase, THREE, spinDir = 1, startDelay = 0) {
   // Tijdlijn (9.5s totaal, zelfde ratio als de referentie HTML):
   // 0.00–0.76s  lichtbol flitst in (smallBuild 0→0.08)
   // 0.0 – 1.0s  lichtbol: stip → max
@@ -251,7 +403,11 @@ function createVaseReveal(vasePivot, vase, THREE, spinDir = 1) {
       if (!state.visible && !state.complete) return;
       if (state.complete) return;
 
-      const elapsed = now - state.startedAt;
+      const elapsed = now - state.startedAt - startDelay;
+      if (elapsed < 0) {
+        resetBol();
+        return;
+      }
       const t = clamp01(elapsed / DURATION);
 
       // Bol: 0→0.6s rustig infaden klein, dan direct groeien 0.6–1.6s, 4.0–5.0s uit
@@ -333,6 +489,7 @@ export default function RoomDecorModels({
     const decorObjects = [];
     const vaseBenders = [];
     const swayObjects = [];
+    const glowReveals = [];
 
     const disposeObject = (object) => {
       object.traverse((node) => {
@@ -418,6 +575,7 @@ export default function RoomDecorModels({
       grootVaasRechts.renderOrder = 2;
       scene.add(grootVaasRechts);
       decorObjects.push(grootVaasRechts);
+      glowReveals.push(createGlowReveal(grootVaasRechts, THREE, { duration: 3.4, holdUntil: 2.1 }));
       swayObjects.push({ bender: prepareVaseBend(grootVaasRechts, THREE), direction: 1, delay: 0.35, anchor: grootVaasRechts, hover: 0 });
 
       // grootcombivaaslinks op de linker vensterbank, aan het uiteinde aan de voorkant
@@ -427,6 +585,7 @@ export default function RoomDecorModels({
       grootCombiVaasLinks.renderOrder = 2;
       scene.add(grootCombiVaasLinks);
       decorObjects.push(grootCombiVaasLinks);
+      glowReveals.push(createGlowReveal(grootCombiVaasLinks, THREE, { duration: 3.4, holdUntil: 2.1 }));
       swayObjects.push({ bender: prepareVaseBend(grootCombiVaasLinks, THREE), direction: -1, delay: 0.5, anchor: grootCombiVaasLinks, hover: 0 });
 
       const createDecorSet = ({ x, y, rotationY, scale = 1 }) => {
@@ -450,7 +609,7 @@ export default function RoomDecorModels({
 
         vaseBender.anchor = vasePivot;
         vaseBender.hover = 0;
-        vaseBender.reveal = createVaseReveal(vasePivot, vase, THREE, x < 0 ? 1 : -1);
+        vaseBender.reveal = createVaseReveal(vasePivot, vase, THREE, x < 0 ? 1 : -1, 3.0);
         vaseBender.impactDirection = x < 0 ? -1 : 1;
         vaseBender.impactDelay = 0.22 + Math.abs(x) * 0.035;
         decorObjects.push(group);
@@ -510,6 +669,15 @@ export default function RoomDecorModels({
         const pointer = pointerRef.current;
         const rect = host.getBoundingClientRect();
         const projected = new THREE.Vector3();
+
+        glowReveals.forEach((reveal) => {
+          if (vasesVisibleRef.current) {
+            reveal.start(now);
+            reveal.update(now);
+          } else {
+            reveal.reset();
+          }
+        });
 
         vaseBenders.forEach((bender) => {
           const localAge = impactAge - (bender.impactDelay || 0);
@@ -594,6 +762,7 @@ export default function RoomDecorModels({
       window.cancelAnimationFrame(frameId);
       cleanupResize?.();
       cleanupPointer?.();
+      glowReveals.forEach((reveal) => reveal.dispose());
       decorObjects.forEach(disposeObject);
       renderer?.dispose();
       if (renderer?.domElement && host.contains(renderer.domElement)) {
