@@ -1,31 +1,31 @@
 [
   {
-    "name": "Givewall",
+    "name": "Efteling",
     "logo": "/assets/logos/givewall-placeholder.svg",
     "tileStyle": "classic"
   },
   {
-    "name": "Studio Delft",
+    "name": "Mcdonald's",
     "logo": "/assets/logos/partner-placeholder.svg",
     "tileStyle": "floral"
   },
   {
-    "name": "North Sea Fund",
+    "name": "Hema",
     "logo": "/assets/logos/partner-placeholder.svg",
     "tileStyle": "crest"
   },
   {
-    "name": "Museum Circle",
+    "name": "Rituals",
     "logo": "/assets/logos/partner-placeholder.svg",
     "tileStyle": "classic"
   },
   {
-    "name": "Canal Partners",
+    "name": "Kruidvat",
     "logo": "/assets/logos/partner-placeholder.svg",
     "tileStyle": "floral"
   },
   {
-    "name": "Golden Seam",
+    "name": "Doritos",
     "logo": "/assets/logos/partner-placeholder.svg",
     "tileStyle": "crest"
   }

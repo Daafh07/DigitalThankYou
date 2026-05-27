@@ -10,6 +10,7 @@ import EntryBuildingModel, { preloadEntryBuildingModel } from './entry-building-
 import HeroScene from './hero-scene';
 import LoadingAnimation from './loading-animation';
 import RoomDecorModels from './room-decor-models';
+import TileScrollytellingFrame from './tile-scrollytelling-frame';
 
 gsap.registerPlugin(SplitText);
 
@@ -96,6 +97,7 @@ export default function DigitalThankYouWall() {
   const [wallAnimationStarted, setWallAnimationStarted] = useState(false);
   const [introComplete,        setIntroComplete]         = useState(false);
   const [tileInserted,         setTileInserted]          = useState(false);
+  const [lookBackActive,       setLookBackActive]        = useState(false);
   const [focusOverlayVisible,  setFocusOverlayVisible]  = useState(true);  // donkere vignette
   const [revealLightVisible,   setRevealLightVisible]   = useState(false); // gouden lichtstralen
   const [decorImpactSignal,    setDecorImpactSignal]    = useState(0);
@@ -183,7 +185,10 @@ export default function DigitalThankYouWall() {
     const el = hintRef.current;
     if (!el) return;
 
-    if (introComplete && !tileInserted) {
+    if (lookBackActive) {
+      if (hintSwapTimer.current) { hintSwapTimer.current.kill(); hintSwapTimer.current = null; }
+      hideHintText(el);
+    } else if (introComplete && !tileInserted) {
       gsap.killTweensOf(el);
       if (hintSwapTimer.current) { hintSwapTimer.current.kill(); hintSwapTimer.current = null; }
 
@@ -193,7 +198,7 @@ export default function DigitalThankYouWall() {
       hintSwapTimer.current = gsap.delayedCall(6, () => {
         hideHintText(el, () => revealHintText(
           el,
-          'Click on the wall to add your tile to the LiveWall,<br>or click "Let\'s take a look back" for a personalised experience',
+          'Click on the wall to add your tile to the LiveWall',
         ));
       });
     } else if (tileInserted) {
@@ -204,7 +209,7 @@ export default function DigitalThankYouWall() {
     return () => {
       if (hintSwapTimer.current) { hintSwapTimer.current.kill(); hintSwapTimer.current = null; }
     };
-  }, [introComplete, tileInserted]);
+  }, [introComplete, lookBackActive, tileInserted]);
 
   const lockHintRef   = useRef(null);
   const lockHintSplit = useRef(null);
@@ -245,6 +250,8 @@ export default function DigitalThankYouWall() {
   const handleWallEntranceComplete = useCallback(() => {/* muur is klaar, niets meer te doen */},        []);
   const handleIntroComplete        = useCallback(() => setIntroComplete(true),                           []);
   const handleTileInserted         = useCallback(() => { setTileInserted(true); setIntroComplete(false); }, []);
+  const handleLookBackStart        = useCallback(() => setLookBackActive(true),                           []);
+  const handleLookBackComplete     = useCallback(() => setLookBackActive(false),                          []);
 
   // Alle drie de poorten zijn open → het laadscherm mag weg.
   const loadingComplete = assetsReady && sceneReady && minimumTimePassed;
@@ -322,7 +329,7 @@ export default function DigitalThankYouWall() {
         {/* De WebGL-muurscène, verborgen totdat het gebouw betreden is.
             Suspense vangt de lazy-import op terwijl Three.js laadt. */}
         <div
-          className={`livewall-wall${buildingEntered ? " livewall-wall-visible" : ""}`}
+          className={`livewall-wall${buildingEntered ? " livewall-wall-visible" : ""}${lookBackActive ? " livewall-wall-scrolly" : ""}`}
         >
           <Suspense
             fallback={<div className="loading">Preparing the wall</div>}
@@ -345,8 +352,16 @@ export default function DigitalThankYouWall() {
               onTileImpact={handleTileImpact}
               onIntroComplete={handleIntroComplete}
               onTileInserted={handleTileInserted}
+              lookBackActive={lookBackActive}
+              onLookBackRequest={handleLookBackStart}
             />
           </Suspense>
+          <TileScrollytellingFrame
+            active={lookBackActive}
+            partners={partners}
+            primaryPartner={primaryPartner}
+            onComplete={handleLookBackComplete}
+          />
         </div>
 
         {/* Unlock hint — visible during locked glow, disappears on tile click */}
