@@ -2,25 +2,6 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 
 const VALID_CODE = "12345";
-const DOOR_MODEL_PATH = "/assets/models/decor/deurCodeScene.glb";
-
-let doorPreloadPromise = null;
-let preloadedDoorScene = null;
-
-export async function preloadCodeActivationSceneModel() {
-  if (preloadedDoorScene) return preloadedDoorScene;
-  if (doorPreloadPromise) return doorPreloadPromise;
-
-  doorPreloadPromise = import("three/examples/jsm/loaders/GLTFLoader.js")
-    .then(({ GLTFLoader }) => new GLTFLoader().loadAsync(DOOR_MODEL_PATH))
-    .then((gltf) => {
-      preloadedDoorScene = gltf.scene;
-      return preloadedDoorScene;
-    })
-    .catch(() => null);
-
-  return doorPreloadPromise;
-}
 
 function CodeInput({ onCorrect }) {
   const [values, setValues] = useState(["", "", "", "", ""]);
@@ -60,10 +41,10 @@ function CodeInput({ onCorrect }) {
   return (
     <div className="code-input-wrapper">
       <div className="code-input-text">
-      <p className="code-input-label">Fill in your unique code</p>
-      <p className="code-input-subtext">
-        Find your unique code on the back of your physical tile.
-      </p>{" "}
+        <p className="code-input-label">Fill in your unique code</p>
+        <p className="code-input-subtext">
+          Find your unique code on the back of your physical tile.
+        </p>
       </div>
       <div className="code-input-fields">
         {values.map((val, i) => (
@@ -91,6 +72,14 @@ function CodeInput({ onCorrect }) {
 function DoorModel({ onReady, shouldOpen, onOpenComplete }) {
   const hostRef = useRef(null);
   const doorRef = useRef(null);
+  // Refs direct updaten bij elke render — geen useEffect nodig
+  const shouldOpenRef = useRef(shouldOpen);
+  const onOpenCompleteRef = useRef(onOpenComplete);
+  shouldOpenRef.current = shouldOpen;
+  onOpenCompleteRef.current = onOpenComplete;
+
+  const animationStartedRef = useRef(false);
+  const animationStartTimeRef = useRef(null);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -98,11 +87,9 @@ function DoorModel({ onReady, shouldOpen, onOpenComplete }) {
 
     async function init() {
       const THREE = await import("three");
+      const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
 
-      const renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: true,
-      });
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setSize(host.clientWidth, host.clientHeight);
       host.appendChild(renderer.domElement);
 
@@ -117,18 +104,11 @@ function DoorModel({ onReady, shouldOpen, onOpenComplete }) {
       const scene = new THREE.Scene();
       scene.add(new THREE.HemisphereLight(0xffffff, 0xd8e7ff, 2.25));
 
-      const doorSource = await preloadCodeActivationSceneModel();
-      const door = doorSource?.clone(true);
-      if (!door) {
-        onReady?.();
-        return () => {
-          renderer.dispose();
-          if (renderer.domElement && host.contains(renderer.domElement)) {
-            host.removeChild(renderer.domElement);
-          }
-        };
-      }
+      const gltf = await new GLTFLoader().loadAsync(
+        "/assets/models/decor/deurCodeScene.glb",
+      );
 
+      const door = gltf.scene;
       const box = new THREE.Box3().setFromObject(door);
       const width = box.getSize(new THREE.Vector3()).x;
       door.position.x = width / 2;
@@ -138,59 +118,48 @@ function DoorModel({ onReady, shouldOpen, onOpenComplete }) {
       pivot.scale.set(0.9, 0.975, 1);
       pivot.add(door);
       scene.add(pivot);
-
       doorRef.current = pivot;
 
+      const target = -Math.PI / 2;
+      const duration = 1200;
+      let completed = false;
       let looping = true;
+
       const animate = () => {
         if (!looping) return;
         requestAnimationFrame(animate);
+
+        // Start animatie zodra shouldOpen true wordt
+        if (shouldOpenRef.current && !animationStartedRef.current) {
+          animationStartedRef.current = true;
+          animationStartTimeRef.current = performance.now();
+        }
+
+        // Deur animeren
+        if (animationStartedRef.current) {
+          const elapsed = performance.now() - animationStartTimeRef.current;
+          const progress = Math.min(elapsed / duration, 1);
+          pivot.rotation.y = target * (1 - Math.pow(1 - progress, 3));
+
+          if (progress >= 1 && !completed) {
+            completed = true;
+            setTimeout(() => onOpenCompleteRef.current?.(), 800);
+          }
+        }
+
         renderer.render(scene, camera);
       };
-      animate();
 
+      animate();
       onReady?.();
 
-      return () => {
-        looping = false;
-      };
+      return () => { looping = false; };
     }
 
     let cleanup = null;
-    init().then((fn) => {
-      cleanup = fn;
-    });
-
-    return () => {
-      cleanup?.();
-    };
+    init().then((fn) => { cleanup = fn; });
+    return () => { cleanup?.(); };
   }, [onReady]);
-
-  useEffect(() => {
-    if (!shouldOpen) return;
-
-    const target = -Math.PI / 2;
-    let done = false;
-
-    const open = () => {
-      if (done) return;
-      if (!doorRef.current) {
-        requestAnimationFrame(open);
-        return;
-      }
-      const diff = target - doorRef.current.rotation.y;
-      if (Math.abs(diff) < 0.01) {
-        doorRef.current.rotation.y = target;
-        done = true;
-        setTimeout(() => onOpenComplete?.(), 800);
-        return;
-      }
-      doorRef.current.rotation.y += diff * 0.05;
-      requestAnimationFrame(open);
-    };
-
-    open();
-  }, [shouldOpen, onOpenComplete]);
 
   return <div ref={hostRef} className="code-activation-scene-door" />;
 }
