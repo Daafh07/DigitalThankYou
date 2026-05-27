@@ -139,12 +139,12 @@ button {
 .tile-hint {
   position: absolute;
   left: 50%;
-  bottom: 6.5%;
+  bottom: clamp(40px, 8vh, 100px);
   z-index: 100;
   transform: translateX(-50%);
   color: rgba(23, 89, 187, 0.62);
   font-family: "Playfair Display", Georgia, serif;
-  font-size: clamp(10px, 1.35vw, 19px);
+  font-size: clamp(14px, 1.8vw, 26px);
   font-style: italic;
   letter-spacing: 0.04em;
   text-align: center;
@@ -153,6 +153,23 @@ button {
   pointer-events: none;
   visibility: hidden;
   perspective: 400px;
+}
+
+.tile-hint--small {
+  font-size: clamp(10px, 1.1vw, 16px);
+}
+
+@media (max-height: 500px) {
+  .tile-hint {
+    bottom: clamp(8px, 2vh, 16px);
+    font-size: clamp(9px, 1.8vw, 13px);
+  }
+}
+
+@media (min-height: 900px) {
+  .tile-hint {
+    bottom: clamp(40px, 5vh, 70px);
+  }
 }
 
 .livewall-logo {
@@ -817,12 +834,10 @@ button {
   position: absolute;
   inset: 0;
   z-index: 2;
-  background: radial-gradient(
-    circle at 50% 35%,
-    rgba(6, 18, 38, 0.14),
-    rgba(6, 18, 38, 0.3) 55%,
-    rgba(6, 18, 38, 0.42) 100%
-  );
+  background: radial-gradient(circle at 50% 35%,
+      rgba(6, 18, 38, 0.14),
+      rgba(6, 18, 38, 0.3) 55%,
+      rgba(6, 18, 38, 0.42) 100%);
   opacity: 0;
   pointer-events: none;
   transition: opacity 680ms ease;
@@ -844,8 +859,7 @@ button {
     opacity 460ms ease,
     transform 1200ms cubic-bezier(0.16, 1, 0.3, 1);
   background:
-    conic-gradient(
-      from 14deg at 47% 36%,
+    conic-gradient(from 14deg at 47% 36%,
       transparent 0deg,
       rgba(255, 232, 168, 0.16) 10deg,
       transparent 24deg,
@@ -860,20 +874,15 @@ button {
       rgba(255, 246, 214, 0.1) 288deg,
       transparent 315deg,
       rgba(255, 249, 221, 0.09) 342deg,
-      transparent 360deg
-    ),
-    radial-gradient(
-      ellipse 55% 24% at 47% 36%,
+      transparent 360deg),
+    radial-gradient(ellipse 55% 24% at 47% 36%,
       rgba(255, 244, 205, 0.55),
       rgba(255, 218, 128, 0.18) 34%,
-      transparent 72%
-    ),
-    radial-gradient(
-      circle at 47% 36%,
+      transparent 72%),
+    radial-gradient(circle at 47% 36%,
       rgba(255, 248, 220, 0.72),
       rgba(255, 224, 145, 0.18) 12%,
-      transparent 38%
-    );
+      transparent 38%);
   filter: blur(22px) saturate(1.04);
 }
 
@@ -957,16 +966,15 @@ button {
   inset: 0;
   width: 42%;
   border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(23, 89, 187, 0.78),
-    transparent
-  );
+  background: linear-gradient(90deg,
+      transparent,
+      rgba(23, 89, 187, 0.78),
+      transparent);
   animation: loaderLine 1.35s ease-in-out infinite;
 }
 
 @keyframes loaderLogoFloat {
+
   0%,
   100% {
     transform: translateY(0);
@@ -1020,6 +1028,16 @@ button {
   visibility: visible;
 }
 
+.entry-transition-fading {
+  opacity: 0;
+}
+
+.entry-transition-fading .entry-transition-building-3d {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 260ms ease;
+}
+
 .entry-transition-frame {
   position: absolute;
   left: 50%;
@@ -1042,22 +1060,114 @@ button {
 }
 
 .entry-transition-building-3d {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 1;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
   background-image: url("/assets/figma/achtergrondloading.svg?v3");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  --entry-door-width: 8%;
+  --entry-door-height: 24%;
+  --entry-shadow-opacity: 0;
+  --entry-inset-opacity: 0;
+  --entry-canvas-scale: 1;
+  --entry-canvas-opacity: 1;
+  --entry-speed-opacity: 0;
+  --entry-tunnel-opacity: 0;
+  --entry-flash-opacity: 0;
+  --entry-chrome-opacity: 1;
+  transform: none;
+  transform-origin: 50% 58%;
+  animation: none;
 }
 
 .entry-transition-building-3d canvas {
   display: block;
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
+  transform: none;
+  opacity: 1;
+  filter: none;
+}
+
+.entry-doorway-shadow {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  z-index: 2;
+  width: var(--entry-door-width);
+  height: var(--entry-door-height);
+  transform: translate(-50%, -50%);
+  border-radius: 7% 7% 2% 2%;
+  box-shadow:
+    0 0 0 180vmax rgba(3, 8, 18, var(--entry-shadow-opacity)),
+    inset 0 0 42px rgba(0, 0, 0, var(--entry-inset-opacity));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.entry-transition-building-entering .entry-doorway-shadow {
+  opacity: 1;
+}
+
+@keyframes entryBuildingRideIn {
+  0% {
+    opacity: 0.35;
+    transform: translateY(12%) scale(1.2);
+    filter: blur(1.5px) saturate(0.96);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translateY(2.5%) scale(1.06);
+    filter: blur(0.4px) saturate(1);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0) saturate(1.02);
+  }
+}
+
+.entry-speed-glow,
+.entry-tunnel-darkness,
+.entry-inside-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.entry-speed-glow {
+  opacity: var(--entry-speed-opacity);
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(ellipse 18% 32% at 50% 58%, rgba(255, 255, 255, 0.72), transparent 62%),
+    radial-gradient(ellipse 42% 70% at 50% 58%, transparent 26%, rgba(255, 255, 255, 0.26) 49%, transparent 76%),
+    linear-gradient(90deg, transparent 0 18%, rgba(255, 255, 255, 0.2) 32%, transparent 46% 54%, rgba(255, 255, 255, 0.18) 68%, transparent 82% 100%);
+  filter: blur(14px);
+}
+
+.entry-tunnel-darkness {
+  opacity: var(--entry-tunnel-opacity);
+  background:
+    radial-gradient(ellipse 30% 42% at 50% 58%, transparent 0 34%, rgba(0, 0, 0, 0.42) 53%, rgba(0, 0, 0, 0.92) 82%),
+    radial-gradient(ellipse 115% 135% at 50% 58%, transparent 0 24%, rgba(0, 0, 0, 0.82) 78%, #000 100%);
+  backdrop-filter: blur(1px);
+}
+
+.entry-inside-flash {
+  opacity: var(--entry-flash-opacity);
+  background:
+    radial-gradient(circle at 50% 55%, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.64) 32%, rgba(247, 251, 255, 0.18) 58%, transparent 78%);
 }
 
 .entry-transition-logo {
@@ -1070,6 +1180,7 @@ button {
   height: auto;
   object-fit: contain;
   pointer-events: none;
+  opacity: var(--entry-chrome-opacity, 1);
 }
 
 .entry-transition-title {
@@ -1084,10 +1195,175 @@ button {
   font-weight: 700;
   white-space: nowrap;
   pointer-events: none;
+  opacity: var(--entry-chrome-opacity, 1);
 }
 
 @media (max-width: 900px) {
   .entry-transition-frame {
     width: max(100vw, 150vh);
   }
+}
+
+/* ─── Code activation scene ─────────────────────────────────────────────────── */
+
+.code-activation-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  overflow: hidden;
+  background: #f7fbff;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  max-height: 100vh;
+  transition: none;
+}
+
+.code-activation-scene-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 0s linear, visibility 0s linear;
+}
+
+.scene-transition-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: #ffffff;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.scene-transition-cover-transparent {
+  opacity: 0;
+}
+
+.scene-transition-cover-solid {
+  opacity: 1;
+}
+
+.scene-transition-cover-fade-in {
+  opacity: 1;
+  transition: opacity 650ms ease;
+}
+
+.scene-transition-cover-fade-out {
+  opacity: 0;
+  transition: opacity 1100ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.code-activation-scene-frame {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: max(100vw, 150vh);
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+}
+
+.code-activation-scene-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  object-position: center;
+  pointer-events: none;
+}
+
+.code-activation-scene-door {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.code-activation-scene-door canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.codeInstructions{
+  z-index: 30;
+}
+
+/* ─── Code input ─────────────────────────────────────────────────────────── */
+
+.code-input-wrapper {
+  position: absolute;
+  top: 22%;
+  /* transform: translateX(-50%); */
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  height: 50%;
+  width: 50%;
+  margin-left: 17.5%;
+}
+
+.code-input-label {
+  font-family: "Playfair Display", Georgia, serif;
+  color: #1759bb;
+  margin-bottom: 5%;
+  font-size: 32px;
+}
+
+.code-input-fields {
+  display: flex;
+  gap: 1rem;
+}
+
+.code-input-field {
+  width: clamp(48px, 5vw, 72px);
+  height: clamp(60px, 7vw, 90px);
+  text-align: center;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(20px, 2.5vw, 36px);
+  color: #1759bb;
+  background: rgba(255, 255, 255, 0.85);
+  border: 2px solid rgba(23, 89, 187, 0.3);
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 200ms ease;
+}
+
+.code-input-field:focus {
+  border-color: #1759bb;
+}
+
+.code-input-field-error {
+  border-color: #e53e3e;
+  animation: shake 0.3s ease;
+}
+
+.code-input-error {
+  color: #e53e3e;
+  font-size: 13px;
+  margin: 0;
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-6px);
+  }
+  75% {
+    transform: translateX(6px);
+  }
+}
+
+.code-input-subtext {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 12px;
+  color: #246fe0;
+  margin: 0;
+  text-align: center;
 }

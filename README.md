@@ -1,10 +1,10 @@
 # Digital Thank You Wall
 
-Next.js WebGL experience for Givewall: a premium Delft Blue appreciation wall where partner tiles become part of a cinematic digital monument.
+Next.js WebGL experience for Livewall: a premium Delft Blue appreciation wall where partner tiles become part of a cinematic digital monument.
 
 ## AI Product Brief
 
-Build an immersive premium web experience called **Digital Thank You Wall** for Givewall.
+Build an immersive premium web experience called **Digital Thank You Wall** for Livewall.
 
 The experience should feel like a mix between a luxury interactive museum installation, a cinematic WebGL website, a premium Dutch Delft Blue digital artwork, and an interactive appreciation wall for partners and sponsors.
 
@@ -47,17 +47,6 @@ Assets live in `public/assets`:
 - `data`
 - `videos`
 
-Partner tiles are generated from `public/assets/data/partners.json`.
-
-```json
-[
-  {
-    "name": "Givewall",
-    "logo": "/assets/logos/givewall-placeholder.svg",
-    "tileStyle": "classic"
-  }
-]
-```
 
 ## Development
 
