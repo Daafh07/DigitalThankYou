@@ -20,6 +20,7 @@ import HeroScene from "./hero-scene";
 import LoadingAnimation from "./loading-animation";
 import RoomDecorModels from "./room-decor-models";
 import CodeActivationScene, {
+  preloadCodeActivationDoorModel,
 } from "./code-activation-scene";
 
 gsap.registerPlugin(SplitText);
@@ -101,7 +102,11 @@ export default function DigitalThankYouWall() {
   // codeActivatie scene
   const [codeActivationSceneVisible, setCodeActivationSceneVisible] =
     useState(false);
+  const [codeActivationSceneReady, setCodeActivationSceneReady] =
+    useState(false);
   const [codeActivationSceneDone, setCodeActivationSceneDone] = useState(false);
+  const [codeActivationRevealPending, setCodeActivationRevealPending] =
+    useState(false);
 
   // Staat voor de muurscène zelf.
   const [wallAnimationStarted, setWallAnimationStarted] = useState(false);
@@ -148,8 +153,6 @@ export default function DigitalThankYouWall() {
       loadImage(`/assets/figma/codeActivationBg.png?${CACHE_VERSION}`),
       loadImage(LOADING_BACKGROUND),
       preloadEntryBuildingModel(),
-      // Cache het deur GLB zodat het direct klaar is als de scène verschijnt
-      fetch('/assets/models/decor/deurCodeScene.glb', { cache: 'force-cache' }).catch(() => null),
     ]).then(() => {
       if (!cancelled) setAssetsReady(true);
     });
@@ -317,6 +320,10 @@ export default function DigitalThankYouWall() {
     () => setCodeActivationSceneDone(true),
     [],
   );
+  const handleCodeActivationReady = useCallback(
+    () => setCodeActivationSceneReady(true),
+    [],
+  );
   const handleIntroComplete = useCallback(() => setIntroComplete(true), []);
   const handleTileInserted = useCallback(() => {
     setTileInserted(true);
@@ -358,6 +365,8 @@ export default function DigitalThankYouWall() {
     if (!entryTransitionVisible || !entryBuildingReady || entryTransitionDone)
       return undefined;
 
+    preloadCodeActivationDoorModel();
+
     const timer = window.setTimeout(() => {
       if (sceneTransitionCoverFrame.current) {
         window.cancelAnimationFrame(sceneTransitionCoverFrame.current);
@@ -372,21 +381,38 @@ export default function DigitalThankYouWall() {
       setEntryTransitionDone(true);
       setEntryTransitionVisible(false);
       setBuildingEntered(false);
+      setCodeActivationSceneReady(false);
       setCodeActivationSceneVisible(true);
+      setCodeActivationRevealPending(true);
       setFocusOverlayVisible(false);
       setRevealLightVisible(false);
-
-      sceneTransitionCoverFrame.current = window.requestAnimationFrame(() => {
-        setSceneTransitionCover("fade-out");
-      });
-      sceneTransitionCoverTimer.current = window.setTimeout(() => {
-        setSceneTransitionCover("hidden");
-        sceneTransitionCoverTimer.current = null;
-      }, SCENE_COVER_FADE_OUT_MS);
     }, ENTRY_TRANSITION_DURATION);
 
     return () => window.clearTimeout(timer);
   }, [entryBuildingReady, entryTransitionDone, entryTransitionVisible]);
+
+  useEffect(() => {
+    if (!codeActivationRevealPending || !codeActivationSceneReady) return;
+
+    if (sceneTransitionCoverFrame.current) {
+      window.cancelAnimationFrame(sceneTransitionCoverFrame.current);
+      sceneTransitionCoverFrame.current = null;
+    }
+    if (sceneTransitionCoverTimer.current) {
+      window.clearTimeout(sceneTransitionCoverTimer.current);
+      sceneTransitionCoverTimer.current = null;
+    }
+
+    sceneTransitionCoverFrame.current = window.requestAnimationFrame(() => {
+      setSceneTransitionCover("fade-out");
+      sceneTransitionCoverFrame.current = null;
+    });
+    sceneTransitionCoverTimer.current = window.setTimeout(() => {
+      setSceneTransitionCover("hidden");
+      setCodeActivationRevealPending(false);
+      sceneTransitionCoverTimer.current = null;
+    }, SCENE_COVER_FADE_OUT_MS);
+  }, [codeActivationRevealPending, codeActivationSceneReady]);
 
   // ── NIEUWE CODE ACTIVATION SCÈNE: zodra codeActivationSceneDone true wordt, verdwijnt het code activation scherm
   // en gaat de ervaring verder naar de tegel-kamer.
@@ -415,6 +441,7 @@ export default function DigitalThankYouWall() {
     activationToTileTimer.current = window.setTimeout(() => {
       setSceneTransitionCover("solid");
       setCodeActivationSceneVisible(false);
+      setCodeActivationSceneReady(false);
       setBuildingEntered(true);
       setFocusOverlayVisible(false);
       setRevealLightVisible(false);
@@ -596,7 +623,12 @@ export default function DigitalThankYouWall() {
         className={`code-activation-scene${codeActivationSceneVisible ? " code-activation-scene-visible" : ""}`}
         aria-hidden={!codeActivationSceneVisible}
       >
-        <CodeActivationScene onComplete={handleCodeActivationComplete} />
+        {codeActivationSceneVisible && (
+          <CodeActivationScene
+            onComplete={handleCodeActivationComplete}
+            onReady={handleCodeActivationReady}
+          />
+        )}
       </div>
 
       {sceneTransitionCover !== "hidden" && (

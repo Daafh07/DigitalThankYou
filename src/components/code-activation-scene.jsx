@@ -2,6 +2,26 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 
 const VALID_CODE = "12345";
+const DOOR_MODEL_URL = "/assets/models/decor/deurCodeScene.glb";
+
+let doorModelPreloadPromise = null;
+let preloadedDoorScene = null;
+
+export async function preloadCodeActivationDoorModel() {
+  if (preloadedDoorScene) return preloadedDoorScene;
+  if (doorModelPreloadPromise) return doorModelPreloadPromise;
+
+  doorModelPreloadPromise = Promise.all([
+    import("three"),
+    import("three/examples/jsm/loaders/GLTFLoader.js"),
+  ]).then(async ([THREE, { GLTFLoader }]) => {
+    const gltf = await new GLTFLoader().loadAsync(DOOR_MODEL_URL);
+    preloadedDoorScene = gltf.scene;
+    return preloadedDoorScene;
+  });
+
+  return doorModelPreloadPromise;
+}
 
 function CodeInput({ onCorrect }) {
   const [values, setValues] = useState(["", "", "", "", ""]);
@@ -85,11 +105,16 @@ function DoorModel({ onReady, shouldOpen, onOpenComplete }) {
     const host = hostRef.current;
     if (!host) return;
 
+    let disposed = false;
+    let renderer = null;
+    let cleanup = null;
+
     async function init() {
       const THREE = await import("three");
-      const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
 
-      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      if (disposed || !host.isConnected) return undefined;
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setSize(host.clientWidth, host.clientHeight);
       host.appendChild(renderer.domElement);
 
@@ -104,11 +129,14 @@ function DoorModel({ onReady, shouldOpen, onOpenComplete }) {
       const scene = new THREE.Scene();
       scene.add(new THREE.HemisphereLight(0xffffff, 0xd8e7ff, 2.25));
 
-      const gltf = await new GLTFLoader().loadAsync(
-        "/assets/models/decor/deurCodeScene.glb",
-      );
+      const cachedDoorScene = await preloadCodeActivationDoorModel();
 
-      const door = gltf.scene;
+      if (disposed || !host.isConnected) {
+        renderer?.dispose();
+        return undefined;
+      }
+
+      const door = cachedDoorScene.clone(true);
       const box = new THREE.Box3().setFromObject(door);
       const width = box.getSize(new THREE.Vector3()).x;
       door.position.x = width / 2;
@@ -150,25 +178,34 @@ function DoorModel({ onReady, shouldOpen, onOpenComplete }) {
         renderer.render(scene, camera);
       };
 
+      renderer.render(scene, camera);
       animate();
       onReady?.();
 
-      return () => { looping = false; };
+      return () => {
+        looping = false;
+        renderer?.dispose();
+        renderer?.domElement?.remove();
+      };
     }
 
-    let cleanup = null;
     init().then((fn) => { cleanup = fn; });
-    return () => { cleanup?.(); };
+    return () => {
+      disposed = true;
+      cleanup?.();
+      renderer?.dispose();
+      renderer?.domElement?.remove();
+    };
   }, [onReady]);
 
   return <div ref={hostRef} className="code-activation-scene-door" />;
 }
 
-export default function CodeActivationScene({ onComplete }) {
+export default function CodeActivationScene({ onComplete, onReady }) {
   const [doorShouldOpen, setDoorShouldOpen] = useState(false);
   const [codeAccepted, setCodeAccepted] = useState(false);
 
-  const handleDoorReady = useCallback(() => {}, []);
+  const handleDoorReady = useCallback(() => onReady?.(), [onReady]);
   const handleCorrectCode = useCallback(() => {
     setCodeAccepted(true);
     setDoorShouldOpen(true);
