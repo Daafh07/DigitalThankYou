@@ -148,6 +148,8 @@ export default function DigitalThankYouWall() {
       loadImage(`/assets/figma/codeActivationBg.png?${CACHE_VERSION}`),
       loadImage(LOADING_BACKGROUND),
       preloadEntryBuildingModel(),
+      // Cache het deur GLB zodat het direct klaar is als de scène verschijnt
+      fetch('/assets/models/decor/deurCodeScene.glb', { cache: 'force-cache' }).catch(() => null),
     ]).then(() => {
       if (!cancelled) setAssetsReady(true);
     });
@@ -594,11 +596,7 @@ export default function DigitalThankYouWall() {
         className={`code-activation-scene${codeActivationSceneVisible ? " code-activation-scene-visible" : ""}`}
         aria-hidden={!codeActivationSceneVisible}
       >
-        {codeActivationSceneVisible && (
-          <CodeActivationScene
-            onComplete={handleCodeActivationComplete}
-          />
-        )}
+        <CodeActivationScene onComplete={handleCodeActivationComplete} />
       </div>
 
       {sceneTransitionCover !== "hidden" && (
