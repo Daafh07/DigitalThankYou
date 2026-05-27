@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 // Timing values for the auto-scroll sequence (all in ms).
-const AUTOPLAY_DELAY = 1400;
+const AUTOPLAY_DELAY = 5200;
 const AUTOPLAY_DURATION = 44000;
 const END_HOLD_DURATION = 1600;
 const RETURN_DURATION = 3300;
@@ -44,6 +44,7 @@ export default function TileScrollytellingFrame({
   active,
   partners = [],
   primaryPartner,
+  onReturning,
   onComplete,
 } = {}) {
   const finishTimerRef = useRef(null);
@@ -80,6 +81,7 @@ export default function TileScrollytellingFrame({
 
     finishTimerRef.current = window.setTimeout(() => {
       setReturning(true);
+      onReturning?.();
       finishTimerRef.current = window.setTimeout(() => onComplete?.(), RETURN_DURATION);
     }, AUTOPLAY_DELAY + AUTOPLAY_DURATION + END_HOLD_DURATION);
 
@@ -129,40 +131,6 @@ export default function TileScrollytellingFrame({
           { left: 85, delay: 145, height: 55, width: 0.9 },
           { left: 91, delay: 290, height: 41, width: 1.4 },
           { left: 96, delay: 30,  height: 70, width: 1.1 },
-        ].map((drip, index) => (
-          <span
-            key={index}
-            style={{
-              "--drip-delay": `${drip.delay}ms`,
-              "--drip-left": `${drip.left}%`,
-              "--drip-height": `${drip.height}%`,
-              "--drip-width": `${drip.width}cqw`,
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Background drip veil effect layered behind the panels. */}
-      <div className="tile-melt-veil" aria-hidden="true">
-        {[
-          { left: 3,  delay: 0,   height: 55, width: 1.4 },
-          { left: 8,  delay: 180, height: 38, width: 0.9 },
-          { left: 14, delay: 70,  height: 72, width: 1.1 },
-          { left: 19, delay: 310, height: 44, width: 1.6 },
-          { left: 25, delay: 120, height: 61, width: 0.8 },
-          { left: 30, delay: 450, height: 33, width: 1.2 },
-          { left: 36, delay: 45,  height: 80, width: 1.0 },
-          { left: 41, delay: 250, height: 49, width: 1.5 },
-          { left: 47, delay: 160, height: 67, width: 0.9 },
-          { left: 52, delay: 400, height: 41, width: 1.3 },
-          { left: 58, delay: 90,  height: 74, width: 1.1 },
-          { left: 63, delay: 340, height: 36, width: 0.8 },
-          { left: 69, delay: 200, height: 58, width: 1.6 },
-          { left: 74, delay: 55,  height: 45, width: 1.0 },
-          { left: 80, delay: 370, height: 82, width: 1.2 },
-          { left: 85, delay: 135, height: 53, width: 0.9 },
-          { left: 91, delay: 270, height: 39, width: 1.4 },
-          { left: 96, delay: 25,  height: 68, width: 1.1 },
         ].map((drip, index) => (
           <span
             key={index}

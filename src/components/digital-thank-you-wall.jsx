@@ -35,7 +35,7 @@ const CACHE_VERSION = "v3";
 const LOADING_BACKGROUND = `/assets/figma/achtergrondloading.svg?${CACHE_VERSION}`;
 
 // Korte ademruimte na de witte entry-flash voordat de codescene verschijnt.
-const ENTRY_TRANSITION_DURATION = 250;
+const ENTRY_TRANSITION_DURATION = 500;
 const SCENE_COVER_FADE_OUT_MS = 1100;
 const ACTIVATION_TO_TILE_FADE_IN_MS = 650;
 
@@ -96,6 +96,7 @@ export default function DigitalThankYouWall() {
   const [entryTransitionVisible, setEntryTransitionVisible] = useState(false);
   const [entryTransitionDone, setEntryTransitionDone] = useState(false);
   const [entryBuildingReady, setEntryBuildingReady] = useState(false);
+  const [entryFlightDone, setEntryFlightDone] = useState(false);
   const [entryFadeOpacity, setEntryFadeOpacity] = useState(0);
   const [sceneTransitionCover, setSceneTransitionCover] = useState("hidden");
   const [buildingEntered, setBuildingEntered] = useState(false);
@@ -116,6 +117,7 @@ export default function DigitalThankYouWall() {
   const [introComplete,        setIntroComplete]         = useState(false);
   const [tileInserted,         setTileInserted]          = useState(false);
   const [lookBackActive,       setLookBackActive]        = useState(false);
+  const [lookBackReturning,    setLookBackReturning]     = useState(false);
   const [focusOverlayVisible,  setFocusOverlayVisible]  = useState(true);  // donkere vignette
   const [revealLightVisible,   setRevealLightVisible]   = useState(false); // gouden lichtstralen
   const [decorImpactSignal,    setDecorImpactSignal]    = useState(0);
@@ -298,7 +300,11 @@ export default function DigitalThankYouWall() {
   const handleSceneReady           = useCallback(() => setSceneReady(true),                              []);
   const handleLoadingComplete      = useCallback(() => setMinimumTimePassed(true),                       []);
   const handleEntryBuildingReady   = useCallback(() => setEntryBuildingReady(true),                      []);
-  const handleEntryFadeProgress    = useCallback((value) => setEntryFadeOpacity(value),                 []);
+  const handleEntryFlightDone      = useCallback(() => setEntryFlightDone(true),                          []);
+  const handleEntryFadeProgress    = useCallback((value) => {
+    setEntryFadeOpacity(value);
+    if (value >= 1) setSceneTransitionCover("solid");
+  }, []);
   const handleCodeActivationComplete = useCallback(() => setCodeActivationSceneDone(true),              []);
   const handleCodeActivationReady  = useCallback(() => setCodeActivationSceneReady(true),                []);
   const handleTileImpact           = useCallback(() => setDecorImpactSignal((value) => value + 1),       []);
@@ -306,8 +312,9 @@ export default function DigitalThankYouWall() {
   const handleWallEntranceComplete = useCallback(() => {/* muur is klaar, niets meer te doen */},        []);
   const handleIntroComplete        = useCallback(() => setIntroComplete(true),                           []);
   const handleTileInserted         = useCallback(() => { setTileInserted(true); setIntroComplete(false); }, []);
-  const handleLookBackReady        = useCallback(() => setLookBackActive(true),                           []);
-  const handleLookBackComplete     = useCallback(() => setLookBackActive(false),                          []);
+  const handleLookBackReady        = useCallback(() => { setLookBackActive(true); setLookBackReturning(false); }, []);
+  const handleLookBackReturning    = useCallback(() => setLookBackReturning(true),                        []);
+  const handleLookBackComplete     = useCallback(() => { setLookBackActive(false); setLookBackReturning(false); }, []);
 
   // Alle drie de poorten zijn open → het laadscherm mag weg.
   const loadingComplete = assetsReady && sceneReady && minimumTimePassed;
@@ -317,9 +324,11 @@ export default function DigitalThankYouWall() {
   useEffect(() => {
     if (!loadingComplete || entryTransitionDone) return undefined;
 
-    setEntryBuildingReady(false); // reset de ready-vlag zodat het 3D-gebouw opnieuw inlaadt
+    setEntryBuildingReady(false);
+    setEntryFlightDone(false);
     setEntryFadeOpacity(0);
     setSceneTransitionCover("hidden");
+    // Mount het gebouw meteen zodat het laadt terwijl de loader nog zichtbaar is.
     setEntryTransitionVisible(true);
     return undefined;
   }, [entryTransitionDone, loadingComplete]);
@@ -341,7 +350,7 @@ export default function DigitalThankYouWall() {
   // Start de timer zodra het 3D-gebouw zijn eerste frame heeft getekend.
   // Na ENTRY_TRANSITION_DURATION ms gaan we door naar de muurscène.
   useEffect(() => {
-    if (!entryTransitionVisible || !entryBuildingReady || entryTransitionDone)
+    if (!entryTransitionVisible || !entryFlightDone || entryTransitionDone)
       return undefined;
 
     preloadCodeActivationDoorModel();
@@ -368,7 +377,7 @@ export default function DigitalThankYouWall() {
     }, ENTRY_TRANSITION_DURATION);
 
     return () => window.clearTimeout(timer);
-  }, [entryBuildingReady, entryTransitionDone, entryTransitionVisible]);
+  }, [entryFlightDone, entryTransitionDone, entryTransitionVisible]);
 
   useEffect(() => {
     if (!codeActivationRevealPending || !codeActivationSceneReady) return;
@@ -479,7 +488,7 @@ export default function DigitalThankYouWall() {
         aria-label="LiveWall Your Place on the Wall"
       >
         <img
-          className="livewall-room"
+          className={`livewall-room${buildingEntered ? " livewall-room-visible" : ""}`}
           src={`/assets/figma/livewall-room.png?${CACHE_VERSION}`}
           alt=""
         />
@@ -506,7 +515,7 @@ export default function DigitalThankYouWall() {
         {/* De WebGL-muurscène, verborgen totdat het gebouw betreden is.
             Suspense vangt de lazy-import op terwijl Three.js laadt. */}
         <div
-          className={`livewall-wall${buildingEntered ? " livewall-wall-visible" : ""}${lookBackActive ? " livewall-wall-scrolly" : ""}`}
+          className={`livewall-wall${buildingEntered ? " livewall-wall-visible" : ""}${lookBackActive ? " livewall-wall-scrolly" : ""}${lookBackReturning ? " livewall-wall-returning" : ""}`}
         >
           <Suspense
             fallback={<div className="loading">Preparing the wall</div>}
@@ -535,10 +544,42 @@ export default function DigitalThankYouWall() {
               onLookBackReady={handleLookBackReady}
             />
           </Suspense>
+          {lookBackActive && (
+            <div className={`tile-melt-veil${lookBackActive ? " tile-melt-veil-active" : ""}`} aria-hidden="true">
+              {[
+                { left: 3,  delay: 0,   height: 55, width: 1.4 },
+                { left: 8,  delay: 180, height: 38, width: 0.9 },
+                { left: 14, delay: 70,  height: 72, width: 1.1 },
+                { left: 19, delay: 310, height: 44, width: 1.6 },
+                { left: 25, delay: 120, height: 61, width: 0.8 },
+                { left: 30, delay: 450, height: 33, width: 1.2 },
+                { left: 36, delay: 45,  height: 80, width: 1.0 },
+                { left: 41, delay: 250, height: 49, width: 1.5 },
+                { left: 47, delay: 160, height: 67, width: 0.9 },
+                { left: 52, delay: 400, height: 41, width: 1.3 },
+                { left: 58, delay: 90,  height: 74, width: 1.1 },
+                { left: 63, delay: 340, height: 36, width: 0.8 },
+                { left: 69, delay: 200, height: 58, width: 1.6 },
+                { left: 74, delay: 55,  height: 45, width: 1.0 },
+                { left: 80, delay: 370, height: 82, width: 1.2 },
+                { left: 85, delay: 135, height: 53, width: 0.9 },
+                { left: 91, delay: 270, height: 39, width: 1.4 },
+                { left: 96, delay: 25,  height: 68, width: 1.1 },
+              ].map((drip, index) => (
+                <span key={index} style={{
+                  "--drip-delay": `${drip.delay}ms`,
+                  "--drip-left": `${drip.left}%`,
+                  "--drip-height": `${drip.height}%`,
+                  "--drip-width": `${drip.width}cqw`,
+                }} />
+              ))}
+            </div>
+          )}
           <TileScrollytellingFrame
             active={lookBackActive}
             partners={partners}
             primaryPartner={primaryPartner}
+            onReturning={handleLookBackReturning}
             onComplete={handleLookBackComplete}
           />
         </div>
@@ -558,9 +599,9 @@ export default function DigitalThankYouWall() {
           alt="LiveWall"
         />
 
-        {/* Laadscherm bovenop alles. Verdwijnt met een fade zodra loadingComplete true is. */}
+        {/* Laadscherm verdwijnt pas als het gebouw klaar is met laden. */}
         <div
-          className={`livewall-loader${loadingComplete ? " livewall-loader-hidden" : ""}`}
+          className={`livewall-loader${entryBuildingReady ? " livewall-loader-hidden" : ""}`}
           aria-hidden={loadingComplete}
         >
           <LoadingAnimation onComplete={handleLoadingComplete} />
@@ -586,7 +627,8 @@ export default function DigitalThankYouWall() {
           />
           {entryTransitionVisible && !entryTransitionDone && (
             <EntryBuildingModel
-              onReady={handleEntryBuildingReady}
+              onModelLoaded={handleEntryBuildingReady}
+              onReady={handleEntryFlightDone}
               onFadeProgress={handleEntryFadeProgress}
             />
           )}
@@ -596,12 +638,12 @@ export default function DigitalThankYouWall() {
             alt=""
           />
           <div className="entry-transition-title">Your Place on the Wall</div>
-          {entryFadeOpacity > 0 && (
+          {entryFadeOpacity > 0 && entryFadeOpacity < 1 && (
             <div
               style={{
-                position: 'absolute',
+                position: 'fixed',
                 inset: 0,
-                zIndex: 50,
+                zIndex: 94,
                 background: '#ffffff',
                 opacity: entryFadeOpacity,
                 pointerEvents: 'none',

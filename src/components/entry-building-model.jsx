@@ -57,7 +57,8 @@ export async function preloadEntryBuildingModel() {
 
 // onFadeProgress(0-1): parent kan de witte overlay bijwerken
 // onReady: camera is volledig in de deur (fade = 1)
-export default function EntryBuildingModel({ onFadeProgress, onReady } = {}) {
+// onModelLoaded: gebouw is geladen en eerste frame is getekend
+export default function EntryBuildingModel({ onFadeProgress, onReady, onModelLoaded } = {}) {
   const hostRef = useRef(null);
 
   useEffect(() => {
@@ -70,6 +71,7 @@ export default function EntryBuildingModel({ onFadeProgress, onReady } = {}) {
     let camera        = null;
     let buildingModel = null;
     let frameId       = 0;
+    let holdTimer     = null;
     let disposed      = false;
     let looping       = true;
 
@@ -99,7 +101,7 @@ export default function EntryBuildingModel({ onFadeProgress, onReady } = {}) {
       THREE = threeNS;
       scene = new THREE.Scene();
 
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance', logarithmicDepthBuffer: true });
       renderer.setClearColor(0x000000, 0);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -107,7 +109,7 @@ export default function EntryBuildingModel({ onFadeProgress, onReady } = {}) {
       renderer.toneMappingExposure = 1.05;
       host.appendChild(renderer.domElement);
 
-      camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+      camera = new THREE.PerspectiveCamera(38, 1, 0.05, 100);
       camera.position.set(0, CAM_START_Y, CAM_START_Z);
       camera.lookAt(0, CAM_START_Y - 0.1, 0);
 
@@ -139,6 +141,8 @@ export default function EntryBuildingModel({ onFadeProgress, onReady } = {}) {
           const lookY  = (CAM_START_Y - 0.1) + (CAM_END_Y - 0.1 - (CAM_START_Y - 0.1)) * t;
           camera.position.set(0, camY, camZ);
           camera.lookAt(0, lookY, 0);
+          camera.near = Math.max(0.02, camZ * 0.08);
+          camera.updateProjectionMatrix();
 
           // Bereken fade-waarde en stuur naar parent
           const fadeT = rawT >= FADE_START
@@ -195,7 +199,8 @@ export default function EntryBuildingModel({ onFadeProgress, onReady } = {}) {
         window.requestAnimationFrame(() => {
           render();
           buildingReady = true;
-          window.setTimeout(() => {
+          onModelLoaded?.();
+          holdTimer = window.setTimeout(() => {
             if (!disposed) animStartTime = performance.now();
           }, HOLD_DURATION * 1000);
         });
@@ -225,6 +230,7 @@ export default function EntryBuildingModel({ onFadeProgress, onReady } = {}) {
       disposed = true;
       looping  = false;
       window.cancelAnimationFrame(frameId);
+      window.clearTimeout(holdTimer);
       cleanupResize?.();
       disposeModel();
       renderer?.dispose();
